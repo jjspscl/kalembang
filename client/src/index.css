@@ -1,0 +1,734 @@
+:root {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+
+  color-scheme: dark;
+  color: rgba(255, 255, 255, 0.87);
+  background-color: #1a1a2e;
+
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  min-height: 100vh;
+  display: flex;
+  justify-content: center;
+  padding: 1rem;
+}
+
+#root {
+  width: 100%;
+  max-width: 480px;
+}
+
+/* =============================================================================
+   Demo Mode Banner
+   ============================================================================= */
+
+.demo-banner {
+  background: linear-gradient(135deg, #ff6b35 0%, #f7c59f 100%);
+  color: #1a1a2e;
+  text-align: center;
+  padding: 0.5rem 1rem;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  margin-bottom: 1rem;
+  box-shadow: 0 2px 8px rgba(255, 107, 53, 0.3);
+}
+
+/* =============================================================================
+   Header & Navigation
+   ============================================================================= */
+
+.header {
+  text-align: center;
+  margin-bottom: 1.5rem;
+}
+
+.header h1 {
+  font-size: 1.75rem;
+  color: #f0f0f0;
+  margin-bottom: 0.75rem;
+}
+
+.nav {
+  display: flex;
+  justify-content: center;
+  gap: 0.5rem;
+}
+
+.nav-link {
+  position: relative;
+  color: #94a3b8;
+  text-decoration: none;
+  padding: 0.5rem 1rem;
+  border-radius: 8px;
+  transition: color 0.2s ease;
+}
+
+.nav-link:hover {
+  color: #f0f0f0;
+}
+
+.nav-link.active {
+  color: #4ade80;
+}
+
+.nav-indicator {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 100%;
+  background-color: #16213e;
+  border-radius: 8px;
+  z-index: -1;
+}
+
+/* =============================================================================
+   Digital Clock
+   ============================================================================= */
+
+.digital-clock {
+  background: linear-gradient(135deg, #16213e 0%, #0f172a 100%);
+  border-radius: 20px;
+  padding: 1.75rem 1.5rem;
+  margin-bottom: 1.5rem;
+  text-align: center;
+  border: 1px solid rgba(74, 222, 128, 0.1);
+  box-shadow: 
+    0 4px 30px rgba(0, 0, 0, 0.3),
+    0 0 60px rgba(74, 222, 128, 0.05) inset;
+}
+
+.clock-time {
+  display: flex;
+  align-items: stretch;
+  justify-content: center;
+  font-size: 3.5rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.05em;
+  color: #4ade80;
+  text-shadow: 
+    0 0 20px rgba(74, 222, 128, 0.4),
+    0 0 40px rgba(74, 222, 128, 0.2);
+}
+
+.clock-separator {
+  opacity: 0.7;
+  animation: blink 1s infinite;
+}
+
+@keyframes blink {
+  0%, 50% { opacity: 0.7; }
+  51%, 100% { opacity: 0.3; }
+}
+
+.clock-hours,
+.clock-minutes {
+  display: inline-flex;
+  align-items: center;
+  min-width: 2ch;
+}
+
+.clock-sub {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  margin-left: 0.35rem;
+  gap: 0.1rem;
+  overflow: hidden;
+}
+
+.clock-seconds {
+  font-size: 1.1rem;
+  line-height: 1;
+  min-width: 2ch;
+}
+
+.clock-ampm {
+  font-size: 1rem;
+  opacity: 0.8;
+  font-weight: 500;
+  line-height: 1;
+}
+
+.clock-date {
+  color: #94a3b8;
+  font-size: 1rem;
+  margin-top: 0.5rem;
+}
+
+/* =============================================================================
+   Typography
+   ============================================================================= */
+
+h1 {
+  font-size: 1.75rem;
+  text-align: center;
+  margin-bottom: 1.5rem;
+  color: #f0f0f0;
+}
+
+h2 {
+  font-size: 1.25rem;
+  margin-bottom: 0.75rem;
+  color: #b0b0b0;
+}
+
+/* =============================================================================
+   Buttons
+   ============================================================================= */
+
+.btn {
+  border: none;
+  border-radius: 8px;
+  padding: 0.75rem 1.5rem;
+  font-size: 1rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-decoration: none;
+  display: inline-block;
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-primary {
+  background-color: #3b82f6;
+  color: white;
+}
+
+.btn-primary:hover:not(:disabled) {
+  background-color: #2563eb;
+}
+
+.btn-secondary {
+  background-color: #475569;
+  color: white;
+}
+
+.btn-secondary:hover:not(:disabled) {
+  background-color: #334155;
+}
+
+.btn-on {
+  background-color: #4ade80;
+  color: #1a1a2e;
+}
+
+.btn-on:hover:not(:disabled) {
+  background-color: #22c55e;
+}
+
+.btn-off {
+  background-color: #64748b;
+  color: white;
+}
+
+.btn-off:hover:not(:disabled) {
+  background-color: #475569;
+}
+
+.btn-stop {
+  background-color: #ef4444;
+  color: white;
+  font-size: 1.25rem;
+  padding: 1rem 2rem;
+  width: 100%;
+}
+
+.btn-stop:hover:not(:disabled) {
+  background-color: #dc2626;
+}
+
+.btn-warning {
+  background-color: #f59e0b;
+  color: #1a1a2e;
+}
+
+.btn-warning:hover:not(:disabled) {
+  background-color: #d97706;
+}
+
+.btn-danger {
+  background-color: #ef4444;
+  color: white;
+}
+
+.btn-danger:hover:not(:disabled) {
+  background-color: #dc2626;
+}
+
+.btn-icon {
+  padding: 0.5rem;
+  min-width: 2.5rem;
+  font-size: 1rem;
+}
+
+/* =============================================================================
+   Cards
+   ============================================================================= */
+
+.card {
+  background: linear-gradient(145deg, #16213e 0%, #1a1a2e 100%);
+  border-radius: 16px;
+  padding: 1.25rem;
+  margin-bottom: 1rem;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+}
+
+/* =============================================================================
+   Clock Controls
+   ============================================================================= */
+
+.clock-controls {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+.status-indicator {
+  margin-left: auto;
+  font-weight: 500;
+}
+
+.status-indicator.on {
+  color: #4ade80;
+}
+
+.status-indicator.off {
+  color: #64748b;
+}
+
+.duty-control {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.duty-control input[type="range"] {
+  flex: 1;
+  height: 8px;
+  border-radius: 4px;
+  background: #334155;
+  outline: none;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.duty-control input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #4ade80;
+  cursor: pointer;
+}
+
+.duty-value {
+  min-width: 3rem;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* =============================================================================
+   Status Panel
+   ============================================================================= */
+
+.status-panel {
+  background-color: #0f172a;
+  border-radius: 8px;
+  padding: 1rem;
+  font-size: 0.875rem;
+}
+
+.status-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 0.25rem 0;
+}
+
+.status-label {
+  color: #94a3b8;
+}
+
+.status-value {
+  font-weight: 500;
+}
+
+.status-value.on {
+  color: #4ade80;
+}
+
+.status-value.off {
+  color: #64748b;
+}
+
+.status-value.warning {
+  color: #ef4444;
+}
+
+/* =============================================================================
+   Stop Section
+   ============================================================================= */
+
+.stop-section {
+  margin-top: 1.5rem;
+}
+
+.latch-warning {
+  background-color: #7f1d1d;
+  border-radius: 8px;
+  padding: 1rem;
+  margin-bottom: 1rem;
+  text-align: center;
+}
+
+.latch-warning p {
+  margin-bottom: 0.75rem;
+}
+
+/* =============================================================================
+   Alarms Page
+   ============================================================================= */
+
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.5rem;
+}
+
+.page-header h2 {
+  margin-bottom: 0;
+}
+
+.empty-state {
+  text-align: center;
+  padding: 3rem 1rem;
+  color: #94a3b8;
+}
+
+.empty-state p {
+  margin-bottom: 1rem;
+}
+
+.alarms-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.alarm-item {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  background: linear-gradient(145deg, #16213e 0%, #1a1a2e 100%);
+  border-radius: 14px;
+  padding: 1rem 1.25rem;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.15);
+}
+
+.alarm-item.disabled {
+  opacity: 0.5;
+}
+
+.alarm-toggle {
+  flex-shrink: 0;
+}
+
+.alarm-info {
+  flex: 1;
+  text-decoration: none;
+  color: inherit;
+}
+
+.alarm-info:hover {
+  opacity: 0.8;
+}
+
+.alarm-time {
+  font-size: 1.5rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: #f0f0f0;
+}
+
+.alarm-meta {
+  display: flex;
+  gap: 0.75rem;
+  font-size: 0.875rem;
+  color: #94a3b8;
+  margin-top: 0.25rem;
+}
+
+.alarm-name {
+  color: #b0b0b0;
+}
+
+.alarm-clock {
+  background-color: #334155;
+  padding: 0.125rem 0.5rem;
+  border-radius: 4px;
+  font-size: 0.75rem;
+}
+
+/* =============================================================================
+   Toggle Switch
+   ============================================================================= */
+
+.toggle {
+  position: relative;
+  display: inline-block;
+  width: 48px;
+  height: 28px;
+}
+
+.toggle input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.toggle-slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: #475569;
+  transition: 0.3s;
+  border-radius: 28px;
+}
+
+.toggle-slider::before {
+  position: absolute;
+  content: "";
+  height: 20px;
+  width: 20px;
+  left: 4px;
+  bottom: 4px;
+  background-color: white;
+  transition: 0.3s;
+  border-radius: 50%;
+}
+
+.toggle input:checked + .toggle-slider {
+  background-color: #4ade80;
+}
+
+.toggle input:checked + .toggle-slider::before {
+  transform: translateX(20px);
+}
+
+/* =============================================================================
+   Forms
+   ============================================================================= */
+
+.alarm-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.form-group label {
+  font-size: 0.875rem;
+  color: #94a3b8;
+  font-weight: 500;
+}
+
+.form-input,
+.form-select {
+  background-color: #0f172a;
+  border: 1px solid #334155;
+  border-radius: 8px;
+  padding: 0.75rem;
+  font-size: 1rem;
+  color: #f0f0f0;
+  outline: none;
+  transition: border-color 0.2s ease;
+}
+
+.form-input:focus,
+.form-select:focus {
+  border-color: #4ade80;
+}
+
+.form-hint {
+  font-size: 0.75rem;
+  color: #64748b;
+}
+
+.time-picker .time-inputs {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.25rem;
+}
+
+.time-input {
+  width: 3.5rem;
+  text-align: center;
+  font-size: 1.75rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  background-color: #0f172a;
+  border: 1px solid #334155;
+  border-radius: 8px;
+  padding: 0.5rem 0.25rem;
+  color: #4ade80;
+  outline: none;
+}
+
+.time-input:focus {
+  border-color: #4ade80;
+}
+
+.time-input-sm {
+  width: 3rem;
+  font-size: 1.5rem;
+}
+
+.ampm-select {
+  font-size: 1.25rem;
+  font-weight: 600;
+  background-color: #0f172a;
+  border: 1px solid #334155;
+  border-radius: 8px;
+  padding: 0.5rem 0.75rem;
+  color: #4ade80;
+  outline: none;
+  cursor: pointer;
+  margin-left: 0.5rem;
+}
+
+.ampm-select:focus {
+  border-color: #4ade80;
+}
+
+.time-separator {
+  font-size: 2rem;
+  font-weight: 600;
+  color: #64748b;
+}
+
+.radio-group {
+  display: flex;
+  gap: 1rem;
+}
+
+.radio-label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+  color: #f0f0f0;
+}
+
+.radio-label input[type="radio"] {
+  accent-color: #4ade80;
+  width: 1rem;
+  height: 1rem;
+}
+
+.days-picker {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.day-btn {
+  padding: 0.5rem 0.75rem;
+  border-radius: 8px;
+  background-color: #334155;
+  color: #94a3b8;
+  border: 1px solid transparent;
+  font-size: 0.875rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.day-btn:hover {
+  background-color: #475569;
+}
+
+.day-btn.active {
+  background-color: #4ade80;
+  color: #1a1a2e;
+}
+
+.form-actions {
+  display: flex;
+  gap: 0.75rem;
+  justify-content: flex-end;
+  margin-top: 1rem;
+}
+
+/* =============================================================================
+   Utilities
+   ============================================================================= */
+
+.error-message {
+  background-color: #7f1d1d;
+  color: #fecaca;
+  padding: 0.75rem;
+  border-radius: 8px;
+  margin-bottom: 1rem;
+  text-align: center;
+}
+
+.loading {
+  text-align: center;
+  padding: 2rem;
+  color: #94a3b8;
+}
+
+/* =============================================================================
+   Form Validation
+   ============================================================================= */
+
+.form-group.has-error label {
+  color: #f87171;
+}
+
+.input-error,
+.form-input.input-error,
+.form-select.input-error,
+.time-input.input-error {
+  border-color: #ef4444 !important;
+  box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.2);
+}
+
+.form-error {
+  display: block;
+  color: #f87171;
+  font-size: 0.8rem;
+  margin-top: 0.5rem;
+}

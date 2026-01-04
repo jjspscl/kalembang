@@ -1,0 +1,40 @@
+# IDE
+.vscode/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+ENV/
+env/
+.env
+*.egg-info/
+dist/
+build/
+
+# Node/Bun
+node_modules/
+.bun/
+*.local
+
+# Build outputs
+client/dist/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Local config
+.env.local
+.env.*.local
+
+# Database
+*.db
