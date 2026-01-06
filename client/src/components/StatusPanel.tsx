@@ -30,16 +30,6 @@ export function StatusPanel({ status }: StatusPanelProps) {
           </span>
         </div>
         <div className="status-row">
-          <span className="status-label">STOP Latch</span>
-          <span
-            className={`status-value ${
-              status.stop_latched ? "warning" : "off"
-            }`}
-          >
-            {status.stop_latched ? "ACTIVE" : "Clear"}
-          </span>
-        </div>
-        <div className="status-row">
           <span className="status-label">STOP Button</span>
           <span
             className={`status-value ${
