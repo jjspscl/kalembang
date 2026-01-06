@@ -7,6 +7,7 @@ Supports two clock motors with enable (ENA/ENB) and direction (IN1-IN4) pins.
 
 import subprocess
 import logging
+import asyncio
 from typing import Optional
 
 from .config import (
@@ -15,7 +16,9 @@ from .config import (
     STOP_BTN_PIN,
     MOTOR_A_DIRECTION, MOTOR_B_DIRECTION,
     GPIO_BACKEND,
+    PWM_FREQUENCY,
 )
+from .pwm import SoftwarePWM
 
 logger = logging.getLogger(__name__)
 
@@ -117,6 +120,9 @@ class MotorController:
         self._clock1_duty = 100
         self._clock2_duty = 100
 
+        self._pwm1: Optional[SoftwarePWM] = None
+        self._pwm2: Optional[SoftwarePWM] = None
+
         self._initialized = False
 
     def initialize(self) -> None:
@@ -150,6 +156,9 @@ class MotorController:
         self._backend.write(IN3_PIN, in3)
         self._backend.write(IN4_PIN, in4)
 
+        self._pwm1 = SoftwarePWM(ENA_PIN, self._backend.write, PWM_FREQUENCY)
+        self._pwm2 = SoftwarePWM(ENB_PIN, self._backend.write, PWM_FREQUENCY)
+
         self._initialized = True
         logger.info("GPIO initialization complete - all motors OFF")
 
@@ -159,35 +168,46 @@ class MotorController:
             raise GPIOError("MotorController not initialized. Call initialize() first.")
 
     def clock1_on(self) -> None:
-        """Turn on Clock 1."""
         self._ensure_initialized()
-        self._backend.write(ENA_PIN, 1)
+        if self._clock1_duty < 100:
+            self._pwm1.set_duty(self._clock1_duty)
+            self._pwm1.start()
+        else:
+            self._pwm1.stop()
+            self._backend.write(ENA_PIN, 1)
         self._clock1_enabled = True
-        logger.info("Clock 1 ON")
+        logger.info(f"Clock 1 ON (duty: {self._clock1_duty}%)")
 
     def clock1_off(self) -> None:
-        """Turn off Clock 1."""
         self._ensure_initialized()
+        self._pwm1.stop()
         self._backend.write(ENA_PIN, 0)
         self._clock1_enabled = False
         logger.info("Clock 1 OFF")
 
     def clock2_on(self) -> None:
-        """Turn on Clock 2."""
         self._ensure_initialized()
-        self._backend.write(ENB_PIN, 1)
+        if self._clock2_duty < 100:
+            self._pwm2.set_duty(self._clock2_duty)
+            self._pwm2.start()
+        else:
+            self._pwm2.stop()
+            self._backend.write(ENB_PIN, 1)
         self._clock2_enabled = True
-        logger.info("Clock 2 ON")
+        logger.info(f"Clock 2 ON (duty: {self._clock2_duty}%)")
 
     def clock2_off(self) -> None:
-        """Turn off Clock 2."""
         self._ensure_initialized()
+        self._pwm2.stop()
         self._backend.write(ENB_PIN, 0)
         self._clock2_enabled = False
         logger.info("Clock 2 OFF")
 
     def all_off(self) -> None:
-        """Turn off all motors immediately."""
+        if self._pwm1:
+            self._pwm1.stop()
+        if self._pwm2:
+            self._pwm2.stop()
         self._backend.write(ENA_PIN, 0)
         self._backend.write(ENB_PIN, 0)
         self._clock1_enabled = False
@@ -195,33 +215,36 @@ class MotorController:
         logger.info("All clocks OFF")
 
     def set_clock1_duty(self, duty: int) -> None:
-        """Set duty cycle for Clock 1 (0-100)."""
         self._ensure_initialized()
         self._clock1_duty = max(0, min(100, duty))
         
-        if self._clock1_duty == 0:
-            self.clock1_off()
-        elif self._clock1_duty == 100:
-            self._backend.write(ENA_PIN, 1)
-            self._clock1_enabled = True
+        if self._clock1_enabled:
+            if self._clock1_duty == 0:
+                self.clock1_off()
+            elif self._clock1_duty == 100:
+                self._pwm1.stop()
+                self._backend.write(ENA_PIN, 1)
+            else:
+                self._pwm1.set_duty(self._clock1_duty)
+                if not self._pwm1._running:
+                    self._pwm1.start()
         
         logger.info(f"Clock 1 duty set to {self._clock1_duty}%")
 
     def set_clock2_duty(self, duty: int) -> bool:
-        """
-        Set duty cycle for Clock 2 (0-100).
-        
-        Returns:
-            True if successful, False if STOP is latched
-        """
         self._ensure_initialized()
         self._clock2_duty = max(0, min(100, duty))
         
-        if self._clock2_duty == 0:
-            self.clock2_off()
-        elif self._clock2_duty == 100:
-            self._backend.write(ENB_PIN, 1)
-            self._clock2_enabled = True
+        if self._clock2_enabled:
+            if self._clock2_duty == 0:
+                self.clock2_off()
+            elif self._clock2_duty == 100:
+                self._pwm2.stop()
+                self._backend.write(ENB_PIN, 1)
+            else:
+                self._pwm2.set_duty(self._clock2_duty)
+                if not self._pwm2._running:
+                    self._pwm2.start()
         
         logger.info(f"Clock 2 duty set to {self._clock2_duty}%")
 
@@ -260,12 +283,11 @@ class MotorController:
         }
 
     def cleanup(self) -> None:
-        """
-        Cleanup GPIO on shutdown.
-        
-        Turns off all motors.
-        """
         if self._initialized:
+            if self._pwm1:
+                self._pwm1.stop()
+            if self._pwm2:
+                self._pwm2.stop()
             self.all_off()
             logger.info("GPIO cleanup complete")
 
