@@ -92,7 +92,7 @@ class MockBackend:
 class MotorController:
     """
     Controls two clock motors via L298N motor driver.
-    
+
     Motor A (Clock 1): ENA, IN1, IN2
     Motor B (Clock 2): ENB, IN3, IN4
     """
@@ -100,7 +100,7 @@ class MotorController:
     def __init__(self, use_mock: bool = False):
         """
         Initialize motor controller.
-        
+
         Args:
             use_mock: If True, use mock backend (for dev without hardware)
         """
@@ -124,7 +124,7 @@ class MotorController:
     def initialize(self) -> None:
         """
         Initialize all GPIO pins.
-        
+
         MUST be called before any motor operations.
         Sets all motors to OFF state.
         """
@@ -261,7 +261,7 @@ class MotorController:
     def read_stop_button(self) -> bool:
         """
         Read the STOP button state.
-        
+
         Returns:
             True if button is pressed (active LOW)
         """
