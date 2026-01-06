@@ -216,7 +216,8 @@ async def lifespan(_app: FastAPI):
         task.cancel()
     _alarm_off_tasks.clear()
 
-    close_db()    controller.cleanup()
+    close_db()
+    controller.cleanup()
     logger.info("Kalembang shutdown complete")
 
 app = FastAPI(
