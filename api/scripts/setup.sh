@@ -14,7 +14,7 @@ if [ "$EUID" -ne 0 ]; then
 fi
 
 # Detect installation directory
-INSTALL_DIR="/opt/kalembang"
+INSTALL_DIR="${KALEMBANG_INSTALL_DIR:-/home/orangepi/kalembang}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_DIR="$(dirname "$(dirname "$SCRIPT_DIR")")"
 

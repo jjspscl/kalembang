@@ -6,17 +6,12 @@ Wants=network.target
 [Service]
 Type=simple
 User=root
-WorkingDirectory=/opt/kalembang/api
-Environment="PATH=/opt/kalembang/api/.venv/bin:/usr/local/bin:/usr/bin:/bin"
+WorkingDirectory=/home/orangepi/kalembang/api
+Environment="PATH=/home/orangepi/kalembang/api/.venv/bin:/usr/local/bin:/usr/bin:/bin"
 Environment="PYTHONUNBUFFERED=1"
 
-# Safety: Force GPIO off before starting (optional extra safety)
-ExecStartPre=/bin/sh -c 'gpio mode 4 out 2>/dev/null; gpio write 4 0 2>/dev/null; gpio mode 5 out 2>/dev/null; gpio write 5 0 2>/dev/null || true'
+ExecStart=/home/orangepi/kalembang/api/.venv/bin/uvicorn kalembang.main:app --host 0.0.0.0 --port 8088
 
-# Main service
-ExecStart=/opt/kalembang/api/.venv/bin/uvicorn kalembang.main:app --host 0.0.0.0 --port 8088
-
-# Restart policy
 Restart=always
 RestartSec=5
 

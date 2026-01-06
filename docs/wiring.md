@@ -24,20 +24,20 @@ OUT3/OUT4        →   Clock 2 motor
 ## Control Connections
 
 ```
-Orange Pi 5           L298N
-─────────────────────────────────
-GPIO (ENA_PIN)   →   ENA (remove jumper!)
-GPIO (ENB_PIN)   →   ENB (remove jumper!)
-GPIO (IN1_PIN)   →   IN1
-GPIO (IN2_PIN)   →   IN2
-GPIO (IN3_PIN)   →   IN3
-GPIO (IN4_PIN)   →   IN4
+Orange Pi 5                      L298N
+────────────────────────────────────────
+Pin 7  (wPi 2,  PWM15)      →   ENA (remove jumper!)
+Pin 26 (wPi 16, PWM1)       →   ENB (remove jumper!)
+Pin 11 (wPi 5,  CAN1_RX)    →   IN1
+Pin 13 (wPi 7,  CAN1_TX)    →   IN2
+Pin 15 (wPi 8,  CAN2_RX)    →   IN3
+Pin 22 (wPi 13, GPIO2_D4)   →   IN4
 ```
 
 ## STOP Button
 
 ```
-GPIO (STOP_BTN_PIN)  →  Button  →  GND
+Pin 12 (wPi 6, CAN2_TX)  →  Button  →  GND
 ```
 
 (Configure GPIO with internal pull-up; button press = LOW)

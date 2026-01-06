@@ -8,15 +8,15 @@ IMPORTANT: Update these values based on your actual wiring and
 the output of `gpio readall` on your specific OP5 image.
 """
 
-ENA_PIN = 4   # Physical pin 16 (PWM-capable, verify with gpio readall)
-IN1_PIN = 0   # Physical pin 11
-IN2_PIN = 2   # Physical pin 13
+ENA_PIN = 2   # Physical pin 7 (PWM15)
+IN1_PIN = 5   # Physical pin 11 (CAN1_RX)
+IN2_PIN = 7   # Physical pin 13 (CAN1_TX)
 
-ENB_PIN = 5   # Physical pin 18 (PWM-capable, verify with gpio readall)
-IN3_PIN = 3   # Physical pin 15
-IN4_PIN = 6   # Physical pin 22
+ENB_PIN = 16  # Physical pin 26 (PWM1)
+IN3_PIN = 8   # Physical pin 15 (CAN2_RX)
+IN4_PIN = 13  # Physical pin 22 (GPIO2_D4)
 
-STOP_BTN_PIN = 1  # Physical pin 12 (verify with gpio readall)
+STOP_BTN_PIN = 6  # Physical pin 12 (CAN2_TX)
 
 MOTOR_A_DIRECTION = (1, 0)  # (IN1, IN2)
 MOTOR_B_DIRECTION = (1, 0)  # (IN3, IN4)

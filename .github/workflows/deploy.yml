@@ -1,0 +1,145 @@
+name: Deploy to Orange Pi 5
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+env:
+  INSTALL_DIR: /home/orangepi/kalembang
+
+jobs:
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install client dependencies
+        working-directory: ./client
+        run: bun install --frozen-lockfile
+
+      - name: Build client (production)
+        working-directory: ./client
+        run: bun run build
+
+      - name: Verify Python dependencies
+        working-directory: ./api
+        run: |
+          pip install -r requirements.txt --dry-run
+
+      - name: Package artifacts
+        run: |
+          mkdir -p dist/kalembang
+          cp -r api dist/kalembang/
+          cp -r client/dist dist/kalembang/client-dist
+          cp -r docs dist/kalembang/
+          cp README.md dist/kalembang/
+          tar -czvf kalembang-release.tar.gz -C dist kalembang
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: kalembang-release
+          path: kalembang-release.tar.gz
+          retention-days: 7
+
+  deploy:
+    name: Deploy to Orange Pi 5
+    runs-on: self-hosted
+    needs: build
+
+    steps:
+      - name: Download artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: kalembang-release
+
+      - name: Stop existing service
+        run: |
+          sudo systemctl stop kalembang.service 2>/dev/null || true
+
+      - name: Backup existing data
+        run: |
+          if [ -f "${{ env.INSTALL_DIR }}/api/data/kalembang.db" ]; then
+            echo "Backing up existing database..."
+            cp "${{ env.INSTALL_DIR }}/api/data/kalembang.db" /tmp/kalembang.db.backup
+          fi
+
+      - name: Extract release
+        run: |
+          rm -rf ${{ env.INSTALL_DIR }}
+          mkdir -p ${{ env.INSTALL_DIR }}
+          tar -xzvf kalembang-release.tar.gz -C /home/orangepi
+          chown -R orangepi:orangepi ${{ env.INSTALL_DIR }}
+
+      - name: Restore database
+        run: |
+          if [ -f "/tmp/kalembang.db.backup" ]; then
+            echo "Restoring database backup..."
+            mkdir -p ${{ env.INSTALL_DIR }}/api/data
+            cp /tmp/kalembang.db.backup ${{ env.INSTALL_DIR }}/api/data/kalembang.db
+            rm /tmp/kalembang.db.backup
+          fi
+
+      - name: Setup Python virtual environment
+        run: |
+          cd ${{ env.INSTALL_DIR }}/api
+          python3 -m venv .venv
+          .venv/bin/pip install --upgrade pip
+          .venv/bin/pip install -r requirements.txt
+
+      - name: Verify wiringOP
+        run: |
+          if ! command -v gpio &> /dev/null; then
+            echo "::warning::wiringOP not found. GPIO control may not work."
+          else
+            echo "wiringOP version:"
+            gpio -v || true
+            echo ""
+            echo "GPIO pin state:"
+            gpio readall || true
+          fi
+
+      - name: Install systemd service
+        run: |
+          sudo cp ${{ env.INSTALL_DIR }}/api/systemd/kalembang.service /etc/systemd/system/
+          sudo systemctl daemon-reload
+          sudo systemctl enable kalembang.service
+
+      - name: Start service
+        run: |
+          sudo systemctl start kalembang.service
+          sleep 3
+          sudo systemctl status kalembang.service
+
+      - name: Health check
+        run: |
+          echo "Waiting for service to be ready..."
+          sleep 5
+          curl -f http://localhost:8088/api/v1/status || {
+            echo "::error::Health check failed"
+            sudo journalctl -u kalembang -n 50 --no-pager
+            exit 1
+          }
+          echo ""
+          echo "✅ Deployment successful!"
+          echo "API available at: http://$(hostname -I | awk '{print $1}'):8088"
+
+      - name: Cleanup
+        if: always()
+        run: |
+          rm -f kalembang-release.tar.gz
