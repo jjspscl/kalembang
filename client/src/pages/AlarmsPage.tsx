@@ -1,12 +1,13 @@
 import { Link } from "@tanstack/react-router";
 import { motion, AnimatePresence } from "motion/react";
-import { useAlarms, useDeleteAlarm, useToggleAlarm } from "../lib";
+import { useAlarms, useDeleteAlarm, useToggleAlarm, useCreateAlarm } from "../lib";
 import { AlarmItem } from "../components/AlarmItem";
 
 export function AlarmsPage() {
   const { data: alarms, isLoading, error } = useAlarms();
   const deleteAlarm = useDeleteAlarm();
   const toggleAlarm = useToggleAlarm();
+  const createAlarm = useCreateAlarm();
 
   if (isLoading) {
     return (
@@ -32,6 +33,19 @@ export function AlarmsPage() {
 
   const handleToggle = (id: number, enabled: boolean) => {
     toggleAlarm.mutate({ id, enabled });
+  };
+
+  const handleDuplicate = (alarm: typeof alarms extends (infer T)[] | undefined ? T : never) => {
+    createAlarm.mutate({
+      name: `${alarm.name} (Copy)`,
+      hour: alarm.hour,
+      minute: alarm.minute,
+      second: alarm.second,
+      clock_id: alarm.clock_id,
+      enabled: false,
+      days: alarm.days,
+      duration: alarm.duration,
+    });
   };
 
   return (
@@ -76,6 +90,7 @@ export function AlarmsPage() {
                   handleToggle(alarm.id!, enabled)
                 }
                 onDelete={() => handleDelete(alarm.id!)}
+                onDuplicate={() => handleDuplicate(alarm)}
               />
             ))}
           </AnimatePresence>

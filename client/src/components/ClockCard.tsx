@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion } from "motion/react";
 import { useClockOn, useClockOff, useClockDuty } from "../lib";
 
@@ -11,18 +11,27 @@ interface ClockCardProps {
 
 export function ClockCard({ clockId, title, enabled, duty }: ClockCardProps) {
   const [localDuty, setLocalDuty] = useState(duty);
+  const [isDragging, setIsDragging] = useState(false);
   const clockOn = useClockOn(clockId);
   const clockOff = useClockOff(clockId);
   const clockDuty = useClockDuty(clockId);
-  if (duty !== localDuty && !clockDuty.isPending) {
-    setLocalDuty(duty);
-  }
+
+  useEffect(() => {
+    if (!isDragging && !clockDuty.isPending) {
+      setLocalDuty(duty);
+    }
+  }, [duty, isDragging, clockDuty.isPending]);
 
   const handleDutyChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setLocalDuty(parseInt(e.target.value, 10));
   };
 
+  const handleDutyStart = () => {
+    setIsDragging(true);
+  };
+
   const handleDutyCommit = () => {
+    setIsDragging(false);
     if (localDuty !== duty) {
       clockDuty.mutate(localDuty);
     }
@@ -71,12 +80,15 @@ export function ClockCard({ clockId, title, enabled, duty }: ClockCardProps) {
         <span>Duty:</span>
         <input
           type="range"
-          min="0"
-          max="100"
+          min={0}
+          max={100}
+          step={1}
           value={localDuty}
           onChange={handleDutyChange}
-          onMouseUp={handleDutyCommit}
-          onTouchEnd={handleDutyCommit}
+          onPointerDown={handleDutyStart}
+          onPointerUp={handleDutyCommit}
+          onPointerCancel={handleDutyCommit}
+          onKeyUp={handleDutyCommit}
         />
         <span className="duty-value">{localDuty}%</span>
       </div>
