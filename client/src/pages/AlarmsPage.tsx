@@ -1,6 +1,11 @@
 import { Link } from "@tanstack/react-router";
 import { motion, AnimatePresence } from "motion/react";
-import { useAlarms, useDeleteAlarm, useToggleAlarm, useCreateAlarm } from "../lib";
+import {
+  useAlarms,
+  useDeleteAlarm,
+  useToggleAlarm,
+  useCreateAlarm,
+} from "../lib";
 import { AlarmItem } from "../components/AlarmItem";
 
 export function AlarmsPage() {
@@ -35,7 +40,9 @@ export function AlarmsPage() {
     toggleAlarm.mutate({ id, enabled });
   };
 
-  const handleDuplicate = (alarm: typeof alarms extends (infer T)[] | undefined ? T : never) => {
+  const handleDuplicate = (
+    alarm: typeof alarms extends (infer T)[] | undefined ? T : never
+  ) => {
     createAlarm.mutate({
       name: `${alarm.name} (Copy)`,
       hour: alarm.hour,

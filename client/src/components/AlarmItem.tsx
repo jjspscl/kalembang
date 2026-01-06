@@ -118,7 +118,10 @@ export function AlarmItem({
                 <Copy size={16} />
                 Duplicate
               </button>
-              <button className="dropdown-item dropdown-item-danger" onClick={handleDelete}>
+              <button
+                className="dropdown-item dropdown-item-danger"
+                onClick={handleDelete}
+              >
                 <Trash2 size={16} />
                 Delete
               </button>
