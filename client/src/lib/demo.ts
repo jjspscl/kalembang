@@ -1,4 +1,3 @@
-
 import type {
   Status,
   ServerTime,
@@ -158,7 +157,6 @@ export const demoAlarmApi = {
   list: async (): Promise<Alarm[]> => {
     await delay(100);
     return [...demoState.alarms].sort((a, b) => {
-
       const timeA = a.hour * 3600 + a.minute * 60 + a.second;
       const timeB = b.hour * 3600 + b.minute * 60 + b.second;
       return timeA - timeB;

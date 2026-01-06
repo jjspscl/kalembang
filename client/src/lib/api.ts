@@ -1,4 +1,3 @@
-
 import {
   isDemo,
   demoStatusApi,
@@ -85,9 +84,7 @@ async function request<T>(
     try {
       const errorData = await response.json();
       detail = errorData.detail;
-    } catch {
-
-    }
+    } catch {}
     throw new ApiError(
       `API request failed: ${response.status}`,
       response.status,

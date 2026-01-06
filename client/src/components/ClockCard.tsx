@@ -9,12 +9,7 @@ interface ClockCardProps {
   duty: number;
 }
 
-export function ClockCard({
-  clockId,
-  title,
-  enabled,
-  duty,
-}: ClockCardProps) {
+export function ClockCard({ clockId, title, enabled, duty }: ClockCardProps) {
   const [localDuty, setLocalDuty] = useState(duty);
   const clockOn = useClockOn(clockId);
   const clockOff = useClockOff(clockId);
