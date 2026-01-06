@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useNavigate, useParams } from "@tanstack/react-router";
 import { z } from "zod";
 import {
@@ -7,6 +7,15 @@ import {
   useUpdateAlarm,
   type AlarmCreate,
 } from "../lib";
+
+const useIsMobile = () => {
+  return useMemo(() => {
+    if (typeof window === "undefined") return false;
+    return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
+      navigator.userAgent
+    ) || ("ontouchstart" in window && window.innerWidth < 768);
+  }, []);
+};
 const alarmFormSchema = z.object({
   name: z.string().max(100, "Name must be 100 characters or less").optional(),
   hour12: z
@@ -56,6 +65,7 @@ export function AlarmEditPage() {
 
   const createAlarm = useCreateAlarm();
   const updateAlarm = useUpdateAlarm();
+  const isMobile = useIsMobile();
   const [name, setName] = useState("");
   const [hour12, setHour12] = useState(7);
   const [ampm, setAmpm] = useState<"AM" | "PM">("AM");
@@ -78,6 +88,24 @@ export function AlarmEditPage() {
     } else {
       return h12 === 12 ? 12 : h12 + 12;
     }
+  };
+
+  const getNativeTimeValue = () => {
+    const h24 = to24Hour(hour12, ampm);
+    return `${h24.toString().padStart(2, "0")}:${minute.toString().padStart(2, "0")}:${second.toString().padStart(2, "0")}`;
+  };
+
+  const handleNativeTimeChange = (value: string) => {
+    const parts = value.split(":");
+    const h24 = parseInt(parts[0]) || 0;
+    const m = parseInt(parts[1]) || 0;
+    const s = parts[2] ? parseInt(parts[2]) : second;
+    const { hour12: h, ampm: ap } = to12Hour(h24);
+    setHour12(h);
+    setAmpm(ap);
+    setMinute(m);
+    setSecond(s);
+    setErrors((prev) => ({ ...prev, hour12: undefined, minute: undefined, second: undefined }));
   };
   useEffect(() => {
     if (existingAlarm) {
@@ -199,56 +227,70 @@ export function AlarmEditPage() {
           }`}
         >
           <label>Time</label>
-          <div className="time-inputs">
-            <input
-              type="number"
-              min={1}
-              max={12}
-              value={hour12}
-              onChange={(e) => {
-                let val = parseInt(e.target.value) || 1;
-                if (val < 1) val = 1;
-                if (val > 12) val = 12;
-                setHour12(val);
-                setErrors((prev) => ({ ...prev, hour12: undefined }));
-              }}
-              className={`time-input ${errors.hour12 ? "input-error" : ""}`}
-            />
-            <span className="time-separator">:</span>
-            <input
-              type="number"
-              min={0}
-              max={59}
-              value={minute.toString().padStart(2, "0")}
-              onChange={(e) => {
-                setMinute(parseInt(e.target.value) || 0);
-                setErrors((prev) => ({ ...prev, minute: undefined }));
-              }}
-              className={`time-input ${errors.minute ? "input-error" : ""}`}
-            />
-            <span className="time-separator">:</span>
-            <input
-              type="number"
-              min={0}
-              max={59}
-              value={second.toString().padStart(2, "0")}
-              onChange={(e) => {
-                setSecond(parseInt(e.target.value) || 0);
-                setErrors((prev) => ({ ...prev, second: undefined }));
-              }}
-              className={`time-input time-input-sm ${
-                errors.second ? "input-error" : ""
-              }`}
-            />
-            <select
-              value={ampm}
-              onChange={(e) => setAmpm(e.target.value as "AM" | "PM")}
-              className="ampm-select"
-            >
-              <option value="AM">AM</option>
-              <option value="PM">PM</option>
-            </select>
-          </div>
+          {isMobile ? (
+            <div className="time-inputs-mobile">
+              <input
+                type="time"
+                step="1"
+                value={getNativeTimeValue()}
+                onChange={(e) => handleNativeTimeChange(e.target.value)}
+                className={`time-input-native ${
+                  errors.hour12 || errors.minute || errors.second ? "input-error" : ""
+                }`}
+              />
+            </div>
+          ) : (
+            <div className="time-inputs">
+              <input
+                type="number"
+                min={1}
+                max={12}
+                value={hour12}
+                onChange={(e) => {
+                  let val = parseInt(e.target.value) || 1;
+                  if (val < 1) val = 1;
+                  if (val > 12) val = 12;
+                  setHour12(val);
+                  setErrors((prev) => ({ ...prev, hour12: undefined }));
+                }}
+                className={`time-input ${errors.hour12 ? "input-error" : ""}`}
+              />
+              <span className="time-separator">:</span>
+              <input
+                type="number"
+                min={0}
+                max={59}
+                value={minute.toString().padStart(2, "0")}
+                onChange={(e) => {
+                  setMinute(parseInt(e.target.value) || 0);
+                  setErrors((prev) => ({ ...prev, minute: undefined }));
+                }}
+                className={`time-input ${errors.minute ? "input-error" : ""}`}
+              />
+              <span className="time-separator">:</span>
+              <input
+                type="number"
+                min={0}
+                max={59}
+                value={second.toString().padStart(2, "0")}
+                onChange={(e) => {
+                  setSecond(parseInt(e.target.value) || 0);
+                  setErrors((prev) => ({ ...prev, second: undefined }));
+                }}
+                className={`time-input time-input-sm ${
+                  errors.second ? "input-error" : ""
+                }`}
+              />
+              <select
+                value={ampm}
+                onChange={(e) => setAmpm(e.target.value as "AM" | "PM")}
+                className="ampm-select"
+              >
+                <option value="AM">AM</option>
+                <option value="PM">PM</option>
+              </select>
+            </div>
+          )}
           {(errors.hour12 || errors.minute || errors.second) && (
             <span className="form-error">
               {errors.hour12 || errors.minute || errors.second}
