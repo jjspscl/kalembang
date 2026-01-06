@@ -84,7 +84,6 @@ jobs:
           rm -rf ${{ env.INSTALL_DIR }}
           mkdir -p ${{ env.INSTALL_DIR }}
           tar -xzvf kalembang-release.tar.gz -C /home/orangepi
-          chown -R orangepi:orangepi ${{ env.INSTALL_DIR }}
 
       - name: Restore database
         run: |
