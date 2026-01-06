@@ -11,9 +11,12 @@ import {
 const useIsMobile = () => {
   return useMemo(() => {
     if (typeof window === "undefined") return false;
-    return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
-      navigator.userAgent
-    ) || ("ontouchstart" in window && window.innerWidth < 768);
+    return (
+      /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
+        navigator.userAgent
+      ) ||
+      ("ontouchstart" in window && window.innerWidth < 768)
+    );
   }, []);
 };
 const alarmFormSchema = z.object({
@@ -92,7 +95,9 @@ export function AlarmEditPage() {
 
   const getNativeTimeValue = () => {
     const h24 = to24Hour(hour12, ampm);
-    return `${h24.toString().padStart(2, "0")}:${minute.toString().padStart(2, "0")}:${second.toString().padStart(2, "0")}`;
+    return `${h24.toString().padStart(2, "0")}:${minute
+      .toString()
+      .padStart(2, "0")}:${second.toString().padStart(2, "0")}`;
   };
 
   const handleNativeTimeChange = (value: string) => {
@@ -105,7 +110,12 @@ export function AlarmEditPage() {
     setAmpm(ap);
     setMinute(m);
     setSecond(s);
-    setErrors((prev) => ({ ...prev, hour12: undefined, minute: undefined, second: undefined }));
+    setErrors((prev) => ({
+      ...prev,
+      hour12: undefined,
+      minute: undefined,
+      second: undefined,
+    }));
   };
   useEffect(() => {
     if (existingAlarm) {
@@ -235,7 +245,9 @@ export function AlarmEditPage() {
                 value={getNativeTimeValue()}
                 onChange={(e) => handleNativeTimeChange(e.target.value)}
                 className={`time-input-native ${
-                  errors.hour12 || errors.minute || errors.second ? "input-error" : ""
+                  errors.hour12 || errors.minute || errors.second
+                    ? "input-error"
+                    : ""
                 }`}
               />
             </div>
