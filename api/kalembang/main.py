@@ -35,9 +35,8 @@ class DutyRequest(BaseModel):
     duty: int = Field(..., ge=0, le=100, description="Duty cycle percentage (0-100)")
 
 class StatusResponse(BaseModel):
-    """Response model for status endpoint."""
-    clock1: dict
-    clock2: dict
+    clock1: dict[str, bool | int]
+    clock2: dict[str, bool | int]
     stop_button_pressed: bool | None
 
 class MessageResponse(BaseModel):
@@ -102,16 +101,16 @@ async def stop_button_monitor():
             await asyncio.sleep(BUTTON_DEBOUNCE_TIME)
             
         except GPIOError as e:
-            logger.error(f"GPIO error in stop button monitor: {e}")
-            await asyncio.sleep(1.0)  # Back off on error
+            logger.error("GPIO error in stop button monitor: %s", e)
+            await asyncio.sleep(1.0)
         except asyncio.CancelledError:
             logger.info("STOP button monitor stopped")
             raise
-        except Exception as e:
-            logger.exception(f"Unexpected error in stop button monitor: {e}")
+        except (OSError, RuntimeError) as e:
+            logger.exception("Unexpected error in stop button monitor: %s", e)
             await asyncio.sleep(1.0)
 
-_alarm_off_tasks: dict[int, asyncio.Task] = {}
+_alarm_off_tasks: dict[int, asyncio.Task[None]] = {}
 
 async def alarm_scheduler():
     """
@@ -129,63 +128,61 @@ async def alarm_scheduler():
             
             enabled_alarms = db.get_enabled_alarms()
             for alarm in enabled_alarms:
+                if alarm.id is None:
+                    continue
+                alarm_id = alarm.id
                 if alarm.matches_time(now):
-                    logger.info(f"Triggering alarm: {alarm.name} (clock {alarm.clock_id})")
+                    logger.info("Triggering alarm: %s (clock %d)", alarm.name, alarm.clock_id)
                     
                     if alarm.clock_id == 1:
                         controller.clock1_on()
                     else:
                         controller.clock2_on()
                     
-                    db.mark_triggered(alarm.id)
+                    db.mark_triggered(alarm_id)
                     
                     if alarm.days == "once":
-                        db.disable_once_alarm(alarm.id)
+                        db.disable_once_alarm(alarm_id)
                     
                     if alarm.duration > 0:
-                        if alarm.id in _alarm_off_tasks:
-                            _alarm_off_tasks[alarm.id].cancel()
+                        if alarm_id in _alarm_off_tasks:
+                            _alarm_off_tasks[alarm_id].cancel()
                         
-                        async def auto_off(clock_id: int, alarm_id: int, duration: int):
+                        async def auto_off(clock_id: int, aid: int, duration: int) -> None:
                             await asyncio.sleep(duration)
                             ctrl = get_controller()
                             if clock_id == 1:
                                 ctrl.clock1_off()
                             else:
                                 ctrl.clock2_off()
-                            logger.info(f"Alarm {alarm_id} auto-off after {duration}s")
-                            _alarm_off_tasks.pop(alarm_id, None)
+                            logger.info("Alarm %d auto-off after %ds", aid, duration)
+                            _alarm_off_tasks.pop(aid, None)
                         
-                        task = asyncio.create_task(auto_off(alarm.clock_id, alarm.id, alarm.duration))
-                        _alarm_off_tasks[alarm.id] = task
+                        task = asyncio.create_task(auto_off(alarm.clock_id, alarm_id, alarm.duration))
+                        _alarm_off_tasks[alarm_id] = task
             
             await asyncio.sleep(1.0 - (datetime.now().microsecond / 1_000_000))
             
         except asyncio.CancelledError:
             logger.info("Alarm scheduler stopped")
             raise
-        except Exception as e:
-            logger.exception(f"Error in alarm scheduler: {e}")
+        except (OSError, RuntimeError, GPIOError) as e:
+            logger.exception("Error in alarm scheduler: %s", e)
             await asyncio.sleep(1.0)
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):
-    """
-    Application lifespan manager.
-    
-    Initializes GPIO and database on startup and cleans up on shutdown.
-    """
+async def lifespan(_app: FastAPI):
     logger.info("Kalembang starting up...")
     
     use_mock = os.environ.get("KALEMBANG_MOCK_GPIO", "").lower() in ("1", "true", "yes")
+    
+    tasks: list[asyncio.Task[None]] = []
     
     try:
         controller = get_controller(use_mock=use_mock)
         controller.initialize()
         
-        db = get_db()
-        
-        tasks = []
+        get_db()
         
         if STOP_BUTTON_ENABLED:
             monitor_task = asyncio.create_task(stop_button_monitor())
@@ -194,10 +191,10 @@ async def lifespan(app: FastAPI):
         scheduler_task = asyncio.create_task(alarm_scheduler())
         tasks.append(scheduler_task)
         
-        logger.info(f"Kalembang ready on {API_HOST}:{API_PORT}")
+        logger.info("Kalembang ready on %s:%d", API_HOST, API_PORT)
         
     except GPIOError as e:
-        logger.error(f"GPIO initialization failed: {e}")
+        logger.error("GPIO initialization failed: %s", e)
         logger.info("Tip: Set KALEMBANG_MOCK_GPIO=1 to run without hardware")
         raise
     
@@ -312,7 +309,8 @@ async def get_time():
     )
 
 def _alarm_to_response(alarm: Alarm) -> AlarmResponse:
-    """Convert Alarm dataclass to AlarmResponse."""
+    if alarm.id is None:
+        raise ValueError("Alarm must have an id")
     return AlarmResponse(
         id=alarm.id,
         name=alarm.name,
@@ -389,11 +387,12 @@ async def update_alarm(alarm_id: int, request: AlarmRequest):
     )
     
     updated = db.update_alarm(alarm)
+    if updated is None:
+        raise HTTPException(status_code=500, detail="Failed to update alarm")
     return _alarm_to_response(updated)
 
 @app.delete("/api/v1/alarms/{alarm_id}", response_model=MessageResponse)
 async def delete_alarm(alarm_id: int):
-    """Delete an alarm."""
     db = get_db()
     
     deleted = db.delete_alarm(alarm_id)
@@ -404,11 +403,10 @@ async def delete_alarm(alarm_id: int):
 
 @app.patch("/api/v1/alarms/{alarm_id}/toggle", response_model=AlarmResponse)
 async def toggle_alarm(alarm_id: int, enabled: bool):
-    """Enable or disable an alarm."""
     db = get_db()
     
     alarm = db.toggle_alarm(alarm_id, enabled)
-    if not alarm:
+    if alarm is None:
         raise HTTPException(status_code=404, detail="Alarm not found")
     
     return _alarm_to_response(alarm)
@@ -424,7 +422,7 @@ if CLIENT_DIR.exists():
     app.mount("/assets", StaticFiles(directory=CLIENT_DIR / "assets"), name="assets")
     
     @app.get("/{path:path}")
-    async def serve_spa(request: Request, path: str):
+    async def serve_spa(_request: Request, path: str):
         file_path = CLIENT_DIR / path
         if file_path.exists() and file_path.is_file():
             return FileResponse(file_path)

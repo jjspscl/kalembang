@@ -7,8 +7,7 @@ Supports two clock motors with enable (ENA/ENB) and direction (IN1-IN4) pins.
 
 import subprocess
 import logging
-import asyncio
-from typing import Optional
+from typing import Optional, Any
 
 from .config import (
     ENA_PIN, ENB_PIN,
@@ -24,14 +23,12 @@ logger = logging.getLogger(__name__)
 
 class GPIOError(Exception):
     """Raised when GPIO operations fail."""
-    pass
 
 class WiringOPBackend:
     """GPIO backend using wiringOP CLI commands."""
 
     @staticmethod
     def _run_gpio_cmd(args: list[str]) -> str:
-        """Execute a gpio command and return output."""
         cmd = ["gpio"] + args
         try:
             result = subprocess.run(
@@ -39,25 +36,24 @@ class WiringOPBackend:
                 capture_output=True,
                 text=True,
                 timeout=5,
+                check=False,
             )
             if result.returncode != 0:
                 raise GPIOError(f"gpio command failed: {result.stderr}")
             return result.stdout
-        except FileNotFoundError:
-            raise GPIOError("wiringOP 'gpio' command not found. Install wiringOP first.")
-        except subprocess.TimeoutExpired:
-            raise GPIOError("gpio command timed out")
+        except FileNotFoundError as exc:
+            raise GPIOError("wiringOP 'gpio' command not found. Install wiringOP first.") from exc
+        except subprocess.TimeoutExpired as exc:
+            raise GPIOError("gpio command timed out") from exc
 
     def setup_pin_output(self, pin: int) -> None:
-        """Configure a pin as output."""
         self._run_gpio_cmd(["mode", str(pin), "out"])
-        logger.debug(f"Pin {pin} configured as output")
+        logger.debug("Pin %d configured as output", pin)
 
     def setup_pin_input_pullup(self, pin: int) -> None:
-        """Configure a pin as input with pull-up resistor."""
         self._run_gpio_cmd(["mode", str(pin), "in"])
         self._run_gpio_cmd(["mode", str(pin), "up"])
-        logger.debug(f"Pin {pin} configured as input with pull-up")
+        logger.debug("Pin %d configured as input with pull-up", pin)
 
     def write(self, pin: int, value: int) -> None:
         """Write a digital value (0 or 1) to a pin."""
@@ -79,16 +75,16 @@ class MockBackend:
     def setup_pin_output(self, pin: int) -> None:
         self._modes[pin] = "out"
         self._pins[pin] = 0
-        logger.debug(f"[MOCK] Pin {pin} configured as output")
+        logger.debug("[MOCK] Pin %d configured as output", pin)
 
     def setup_pin_input_pullup(self, pin: int) -> None:
         self._modes[pin] = "in"
         self._pins[pin] = 1  # Pull-up means HIGH when not pressed
-        logger.debug(f"[MOCK] Pin {pin} configured as input with pull-up")
+        logger.debug("[MOCK] Pin %d configured as input with pull-up", pin)
 
     def write(self, pin: int, value: int) -> None:
         self._pins[pin] = value
-        logger.debug(f"[MOCK] Pin {pin} = {value}")
+        logger.debug("[MOCK] Pin %d = %d", pin, value)
 
     def read(self, pin: int) -> int:
         return self._pins.get(pin, 1)
@@ -169,6 +165,8 @@ class MotorController:
 
     def clock1_on(self) -> None:
         self._ensure_initialized()
+        if self._pwm1 is None:
+            raise GPIOError("PWM not initialized")
         if self._clock1_duty < 100:
             self._pwm1.set_duty(self._clock1_duty)
             self._pwm1.start()
@@ -176,10 +174,12 @@ class MotorController:
             self._pwm1.stop()
             self._backend.write(ENA_PIN, 1)
         self._clock1_enabled = True
-        logger.info(f"Clock 1 ON (duty: {self._clock1_duty}%)")
+        logger.info("Clock 1 ON (duty: %d%%)", self._clock1_duty)
 
     def clock1_off(self) -> None:
         self._ensure_initialized()
+        if self._pwm1 is None:
+            raise GPIOError("PWM not initialized")
         self._pwm1.stop()
         self._backend.write(ENA_PIN, 0)
         self._clock1_enabled = False
@@ -187,6 +187,8 @@ class MotorController:
 
     def clock2_on(self) -> None:
         self._ensure_initialized()
+        if self._pwm2 is None:
+            raise GPIOError("PWM not initialized")
         if self._clock2_duty < 100:
             self._pwm2.set_duty(self._clock2_duty)
             self._pwm2.start()
@@ -194,10 +196,12 @@ class MotorController:
             self._pwm2.stop()
             self._backend.write(ENB_PIN, 1)
         self._clock2_enabled = True
-        logger.info(f"Clock 2 ON (duty: {self._clock2_duty}%)")
+        logger.info("Clock 2 ON (duty: %d%%)", self._clock2_duty)
 
     def clock2_off(self) -> None:
         self._ensure_initialized()
+        if self._pwm2 is None:
+            raise GPIOError("PWM not initialized")
         self._pwm2.stop()
         self._backend.write(ENB_PIN, 0)
         self._clock2_enabled = False
@@ -216,6 +220,8 @@ class MotorController:
 
     def set_clock1_duty(self, duty: int) -> None:
         self._ensure_initialized()
+        if self._pwm1 is None:
+            raise GPIOError("PWM not initialized")
         self._clock1_duty = max(0, min(100, duty))
         
         if self._clock1_enabled:
@@ -226,13 +232,15 @@ class MotorController:
                 self._backend.write(ENA_PIN, 1)
             else:
                 self._pwm1.set_duty(self._clock1_duty)
-                if not self._pwm1._running:
+                if not self._pwm1.is_running:
                     self._pwm1.start()
         
-        logger.info(f"Clock 1 duty set to {self._clock1_duty}%")
+        logger.info("Clock 1 duty set to %d%%", self._clock1_duty)
 
-    def set_clock2_duty(self, duty: int) -> bool:
+    def set_clock2_duty(self, duty: int) -> None:
         self._ensure_initialized()
+        if self._pwm2 is None:
+            raise GPIOError("PWM not initialized")
         self._clock2_duty = max(0, min(100, duty))
         
         if self._clock2_enabled:
@@ -243,10 +251,10 @@ class MotorController:
                 self._backend.write(ENB_PIN, 1)
             else:
                 self._pwm2.set_duty(self._clock2_duty)
-                if not self._pwm2._running:
+                if not self._pwm2.is_running:
                     self._pwm2.start()
         
-        logger.info(f"Clock 2 duty set to {self._clock2_duty}%")
+        logger.info("Clock 2 duty set to %d%%", self._clock2_duty)
 
     def read_stop_button(self) -> bool:
         """
@@ -263,13 +271,7 @@ class MotorController:
         self.all_off()
         logger.warning("STOP triggered - all motors OFF")
 
-    def get_status(self) -> dict:
-        """
-        Get current status of all motors and controls.
-        
-        Returns:
-            Dictionary with current state
-        """
+    def get_status(self) -> dict[str, Any]:
         return {
             "clock1": {
                 "enabled": self._clock1_enabled,
@@ -291,16 +293,12 @@ class MotorController:
             self.all_off()
             logger.info("GPIO cleanup complete")
 
-_controller: Optional[MotorController] = None
+
+class _ControllerHolder:
+    instance: Optional[MotorController] = None
+
 
 def get_controller(use_mock: bool = False) -> MotorController:
-    """
-    Get or create the global MotorController instance.
-    
-    Args:
-        use_mock: If True, use mock backend (for dev without hardware)
-    """
-    global _controller
-    if _controller is None:
-        _controller = MotorController(use_mock=use_mock)
-    return _controller
+    if _ControllerHolder.instance is None:
+        _ControllerHolder.instance = MotorController(use_mock=use_mock)
+    return _ControllerHolder.instance

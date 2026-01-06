@@ -12,37 +12,27 @@ Note: Software PWM has limitations:
 
 import asyncio
 import logging
-from typing import Optional
+from typing import Optional, Callable
 
 logger = logging.getLogger(__name__)
 
+WriteFunc = Callable[[int, int], None]
+
+
 class SoftwarePWM:
-    """
-    Software PWM controller for a single GPIO pin.
-    
-    Uses asyncio for non-blocking operation.
-    """
 
     def __init__(
         self,
         pin: int,
-        write_func: callable,
+        write_func: WriteFunc,
         frequency: int = 500,
     ):
-        """
-        Initialize software PWM.
-        
-        Args:
-            pin: GPIO pin number
-            write_func: Function to write to GPIO (write_func(pin, value))
-            frequency: PWM frequency in Hz
-        """
         self.pin = pin
-        self.write = write_func
+        self.write: WriteFunc = write_func
         self.frequency = frequency
-        self.duty = 0  # 0-100
+        self.duty = 0
         self._running = False
-        self._task: Optional[asyncio.Task] = None
+        self._task: Optional[asyncio.Task[None]] = None
 
     @property
     def period(self) -> float:
@@ -71,65 +61,38 @@ class SoftwarePWM:
                     self.write(self.pin, 0)
                     await asyncio.sleep(off_time)
 
+    @property
+    def is_running(self) -> bool:
+        return self._running
+
     def start(self) -> None:
-        """Start the PWM loop."""
         if self._running:
             return
         
         self._running = True
         self._task = asyncio.create_task(self._pwm_loop())
-        logger.debug(f"PWM started on pin {self.pin} at {self.frequency}Hz")
+        logger.debug("PWM started on pin %d at %dHz", self.pin, self.frequency)
 
     def stop(self) -> None:
-        """Stop the PWM loop and set pin LOW."""
         self._running = False
         if self._task:
             self._task.cancel()
             self._task = None
         self.write(self.pin, 0)
-        logger.debug(f"PWM stopped on pin {self.pin}")
+        logger.debug("PWM stopped on pin %d", self.pin)
 
     def set_duty(self, duty: int) -> None:
-        """
-        Set duty cycle (0-100).
-        
-        Args:
-            duty: Duty cycle percentage (0=off, 100=full on)
-        """
         self.duty = max(0, min(100, duty))
-        logger.debug(f"PWM pin {self.pin} duty set to {self.duty}%")
+        logger.debug("PWM pin %d duty set to %d%%", self.pin, self.duty)
 
     def set_frequency(self, frequency: int) -> None:
-        """
-        Set PWM frequency.
-        
-        Args:
-            frequency: Frequency in Hz (recommended: 200-1000)
-        """
         self.frequency = max(1, min(10000, frequency))
-        logger.debug(f"PWM pin {self.pin} frequency set to {self.frequency}Hz")
+        logger.debug("PWM pin %d frequency set to %dHz", self.pin, self.frequency)
 
 class PWMManager:
-    """
-    Manages multiple software PWM channels.
-    
-    Usage:
-        manager = PWMManager(write_func)
-        manager.add_channel("clock1", pin=4)
-        manager.add_channel("clock2", pin=5)
-        manager.start_all()
-        manager.set_duty("clock1", 50)
-    """
 
-    def __init__(self, write_func: callable, default_frequency: int = 500):
-        """
-        Initialize PWM manager.
-        
-        Args:
-            write_func: Function to write to GPIO (write_func(pin, value))
-            default_frequency: Default PWM frequency for new channels
-        """
-        self.write_func = write_func
+    def __init__(self, write_func: WriteFunc, default_frequency: int = 500):
+        self.write_func: WriteFunc = write_func
         self.default_frequency = default_frequency
         self._channels: dict[str, SoftwarePWM] = {}
 
@@ -149,7 +112,7 @@ class PWMManager:
         """
         freq = frequency or self.default_frequency
         self._channels[name] = SoftwarePWM(pin, self.write_func, freq)
-        logger.info(f"PWM channel '{name}' added on pin {pin}")
+        logger.info("PWM channel '%s' added on pin %d", name, pin)
 
     def start_all(self) -> None:
         """Start PWM on all channels."""
@@ -172,7 +135,7 @@ class PWMManager:
         if name in self._channels:
             self._channels[name].set_duty(duty)
         else:
-            logger.warning(f"Unknown PWM channel: {name}")
+            logger.warning("Unknown PWM channel: %s", name)
 
     def get_duty(self, name: str) -> Optional[int]:
         """Get current duty cycle for a channel."""
