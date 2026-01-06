@@ -116,7 +116,6 @@ class MotorController:
         self._clock2_enabled = False
         self._clock1_duty = 100
         self._clock2_duty = 100
-        self._stop_latched = False
 
         self._initialized = False
 
@@ -159,22 +158,12 @@ class MotorController:
         if not self._initialized:
             raise GPIOError("MotorController not initialized. Call initialize() first.")
 
-    def clock1_on(self) -> bool:
-        """
-        Turn on Clock 1.
-        
-        Returns:
-            True if successful, False if STOP is latched
-        """
+    def clock1_on(self) -> None:
+        """Turn on Clock 1."""
         self._ensure_initialized()
-        if self._stop_latched:
-            logger.warning("Clock 1 ON blocked - STOP is latched")
-            return False
-        
         self._backend.write(ENA_PIN, 1)
         self._clock1_enabled = True
         logger.info("Clock 1 ON")
-        return True
 
     def clock1_off(self) -> None:
         """Turn off Clock 1."""
@@ -183,22 +172,12 @@ class MotorController:
         self._clock1_enabled = False
         logger.info("Clock 1 OFF")
 
-    def clock2_on(self) -> bool:
-        """
-        Turn on Clock 2.
-        
-        Returns:
-            True if successful, False if STOP is latched
-        """
+    def clock2_on(self) -> None:
+        """Turn on Clock 2."""
         self._ensure_initialized()
-        if self._stop_latched:
-            logger.warning("Clock 2 ON blocked - STOP is latched")
-            return False
-        
         self._backend.write(ENB_PIN, 1)
         self._clock2_enabled = True
         logger.info("Clock 2 ON")
-        return True
 
     def clock2_off(self) -> None:
         """Turn off Clock 2."""
@@ -215,21 +194,9 @@ class MotorController:
         self._clock2_enabled = False
         logger.info("All clocks OFF")
 
-    def set_clock1_duty(self, duty: int) -> bool:
-        """
-        Set duty cycle for Clock 1 (0-100).
-        
-        Note: Actual PWM implementation is in pwm.py.
-        This stores the target duty and triggers PWM if enabled.
-        
-        Returns:
-            True if successful, False if STOP is latched
-        """
+    def set_clock1_duty(self, duty: int) -> None:
+        """Set duty cycle for Clock 1 (0-100)."""
         self._ensure_initialized()
-        if self._stop_latched and duty > 0:
-            logger.warning("Clock 1 duty blocked - STOP is latched")
-            return False
-        
         self._clock1_duty = max(0, min(100, duty))
         
         if self._clock1_duty == 0:
@@ -239,7 +206,6 @@ class MotorController:
             self._clock1_enabled = True
         
         logger.info(f"Clock 1 duty set to {self._clock1_duty}%")
-        return True
 
     def set_clock2_duty(self, duty: int) -> bool:
         """
@@ -249,10 +215,6 @@ class MotorController:
             True if successful, False if STOP is latched
         """
         self._ensure_initialized()
-        if self._stop_latched and duty > 0:
-            logger.warning("Clock 2 duty blocked - STOP is latched")
-            return False
-        
         self._clock2_duty = max(0, min(100, duty))
         
         if self._clock2_duty == 0:
@@ -262,7 +224,6 @@ class MotorController:
             self._clock2_enabled = True
         
         logger.info(f"Clock 2 duty set to {self._clock2_duty}%")
-        return True
 
     def read_stop_button(self) -> bool:
         """
@@ -275,19 +236,9 @@ class MotorController:
         return self._backend.read(STOP_BTN_PIN) == 0
 
     def trigger_stop(self) -> None:
-        """
-        Trigger emergency stop.
-        
-        Turns off all motors and sets the stop latch.
-        """
+        """Trigger emergency stop - turns off all motors."""
         self.all_off()
-        self._stop_latched = True
-        logger.warning("STOP triggered - all motors OFF, latch active")
-
-    def clear_stop_latch(self) -> None:
-        """Clear the stop latch, allowing motors to be turned on again."""
-        self._stop_latched = False
-        logger.info("STOP latch cleared")
+        logger.warning("STOP triggered - all motors OFF")
 
     def get_status(self) -> dict:
         """
@@ -305,7 +256,6 @@ class MotorController:
                 "enabled": self._clock2_enabled,
                 "duty": self._clock2_duty,
             },
-            "stop_latched": self._stop_latched,
             "stop_button_pressed": self.read_stop_button() if self._initialized else None,
         }
 

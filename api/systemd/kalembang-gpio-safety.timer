@@ -1,0 +1,11 @@
+[Unit]
+Description=Kalembang GPIO Safety Check Timer
+Requires=kalembang-gpio-safety.service
+
+[Timer]
+OnBootSec=30
+OnUnitActiveSec=60
+Unit=kalembang-gpio-safety.service
+
+[Install]
+WantedBy=timers.target

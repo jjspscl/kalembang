@@ -10,7 +10,6 @@ import type {
 interface DemoState {
   clock1: { enabled: boolean; duty: number };
   clock2: { enabled: boolean; duty: number };
-  stopLatched: boolean;
   alarms: Alarm[];
   nextAlarmId: number;
 }
@@ -18,7 +17,6 @@ interface DemoState {
 const demoState: DemoState = {
   clock1: { enabled: false, duty: 50 },
   clock2: { enabled: false, duty: 50 },
-  stopLatched: false,
   alarms: [
     {
       id: 1,
@@ -77,7 +75,6 @@ export const demoStatusApi = {
     return {
       clock1: demoState.clock1,
       clock2: demoState.clock2,
-      stop_latched: demoState.stopLatched,
       stop_button_pressed: false,
       current_time: new Date().toISOString(),
     };
@@ -151,15 +148,9 @@ export const demoClockApi = {
 export const demoStopApi = {
   trigger: async (): Promise<ApiResponse> => {
     await delay();
-    demoState.stopLatched = true;
     demoState.clock1.enabled = false;
     demoState.clock2.enabled = false;
     return success("Stop triggered - all clocks stopped");
-  },
-  clear: async (): Promise<ApiResponse> => {
-    await delay();
-    demoState.stopLatched = false;
-    return success("Stop cleared");
   },
 };
 

@@ -17,7 +17,6 @@ export interface ClockStatus {
 export interface Status {
   clock1: ClockStatus;
   clock2: ClockStatus;
-  stop_latched: boolean;
   stop_button_pressed: boolean | null;
   current_time: string;
 }
@@ -134,7 +133,6 @@ export const clockApi = isDemo ? demoClockApi : realClockApi;
 const realStopApi = {
   trigger: () =>
     request<ApiResponse>("/api/v1/stop/trigger", { method: "POST" }),
-  clear: () => request<ApiResponse>("/api/v1/stop/clear", { method: "POST" }),
 };
 
 export const stopApi = isDemo ? demoStopApi : realStopApi;

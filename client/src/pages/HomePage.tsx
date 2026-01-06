@@ -28,7 +28,6 @@ export function HomePage() {
         title="Clock 1"
         enabled={status?.clock1.enabled ?? false}
         duty={status?.clock1.duty ?? 100}
-        disabled={status?.stop_latched ?? false}
       />
 
       {/* Clock 2 */}
@@ -37,11 +36,10 @@ export function HomePage() {
         title="Clock 2"
         enabled={status?.clock2.enabled ?? false}
         duty={status?.clock2.duty ?? 100}
-        disabled={status?.stop_latched ?? false}
       />
 
       {/* Stop Section */}
-      <StopSection isLatched={status?.stop_latched ?? false} />
+      <StopSection />
 
       {/* Status Panel */}
       <StatusPanel status={status ?? null} />

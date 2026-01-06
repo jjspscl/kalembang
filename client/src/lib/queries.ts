@@ -104,17 +104,6 @@ export function useStopTrigger() {
   });
 }
 
-export function useStopClear() {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: stopApi.clear,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.status });
-    },
-  });
-}
-
 export function useAlarms(
   options?: Omit<UseQueryOptions<Alarm[]>, "queryKey" | "queryFn">
 ) {

@@ -7,7 +7,6 @@ interface ClockCardProps {
   title: string;
   enabled: boolean;
   duty: number;
-  disabled: boolean;
 }
 
 export function ClockCard({
@@ -15,7 +14,6 @@ export function ClockCard({
   title,
   enabled,
   duty,
-  disabled,
 }: ClockCardProps) {
   const [localDuty, setLocalDuty] = useState(duty);
   const clockOn = useClockOn(clockId);
@@ -48,7 +46,7 @@ export function ClockCard({
         <motion.button
           className="btn btn-on"
           onClick={() => clockOn.mutate()}
-          disabled={disabled || enabled || clockOn.isPending}
+          disabled={enabled || clockOn.isPending}
           whileHover={{ scale: 1.02 }}
           whileTap={{ scale: 0.97 }}
           transition={{ duration: 0.1 }}
@@ -84,7 +82,6 @@ export function ClockCard({
           onChange={handleDutyChange}
           onMouseUp={handleDutyCommit}
           onTouchEnd={handleDutyCommit}
-          disabled={disabled}
         />
         <span className="duty-value">{localDuty}%</span>
       </div>

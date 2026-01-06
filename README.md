@@ -132,10 +132,26 @@ orangepi ALL=(ALL) NOPASSWD: /usr/bin/systemctl start kalembang.service
 orangepi ALL=(ALL) NOPASSWD: /usr/bin/systemctl enable kalembang.service
 orangepi ALL=(ALL) NOPASSWD: /usr/bin/systemctl status kalembang.service
 orangepi ALL=(ALL) NOPASSWD: /usr/bin/systemctl daemon-reload
-orangepi ALL=(ALL) NOPASSWD: /bin/cp * /etc/systemd/system/kalembang.service
+orangepi ALL=(ALL) NOPASSWD: /usr/bin/systemctl enable kalembang-gpio-safety.timer
+orangepi ALL=(ALL) NOPASSWD: /usr/bin/systemctl start kalembang-gpio-safety.timer
+orangepi ALL=(ALL) NOPASSWD: /bin/cp * /etc/systemd/system/*
 orangepi ALL=(ALL) NOPASSWD: /usr/bin/journalctl -u kalembang *
 EOF
 sudo chmod 440 /etc/sudoers.d/kalembang-deploy
+```
+
+### GPIO Safety Monitor
+
+A systemd timer runs every 60 seconds to ensure GPIO pins are LOW when the main service isn't running:
+
+```bash
+sudo systemctl status kalembang-gpio-safety.timer
+```
+
+You can also manually reset pins:
+
+```bash
+/home/orangepi/kalembang/api/scripts/gpio-safety.sh reset
 ```
 
 ### GPIO Access

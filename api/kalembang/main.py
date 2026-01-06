@@ -20,7 +20,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
-from .config import API_HOST, API_PORT, STOP_LATCH, BUTTON_DEBOUNCE_TIME
+from .config import API_HOST, API_PORT, BUTTON_DEBOUNCE_TIME, STOP_BUTTON_ENABLED
 from .gpio import get_controller, GPIOError
 from .database import get_db, close_db, Alarm
 
@@ -38,7 +38,6 @@ class StatusResponse(BaseModel):
     """Response model for status endpoint."""
     clock1: dict
     clock2: dict
-    stop_latched: bool
     stop_button_pressed: bool | None
 
 class MessageResponse(BaseModel):
@@ -83,9 +82,7 @@ async def stop_button_monitor():
     """
     Background task to monitor the STOP button.
     
-    When pressed:
-    - If not latched: triggers emergency stop and sets the latch
-    - If latched: clears the latch
+    When pressed, immediately stops all motors.
     """
     controller = get_controller()
     button_was_pressed = False
@@ -97,12 +94,8 @@ async def stop_button_monitor():
             button_pressed = controller.read_stop_button()
             
             if button_pressed and not button_was_pressed:
-                if controller._stop_latched:
-                    logger.info("STOP button pressed - clearing latch")
-                    controller.clear_stop()
-                else:
-                    logger.warning("STOP button pressed - triggering stop!")
-                    controller.trigger_stop()
+                logger.warning("STOP button pressed - stopping all motors!")
+                controller.trigger_stop()
             
             button_was_pressed = button_pressed
             
@@ -133,10 +126,6 @@ async def alarm_scheduler():
             now = datetime.now()
             db = get_db()
             controller = get_controller()
-            
-            if controller._stop_latched:
-                await asyncio.sleep(1.0)
-                continue
             
             enabled_alarms = db.get_enabled_alarms()
             for alarm in enabled_alarms:
@@ -198,7 +187,7 @@ async def lifespan(app: FastAPI):
         
         tasks = []
         
-        if STOP_LATCH:
+        if STOP_BUTTON_ENABLED:
             monitor_task = asyncio.create_task(stop_button_monitor())
             tasks.append(monitor_task)
         
@@ -257,17 +246,7 @@ async def get_status():
 async def clock1_on():
     """Turn on Clock 1."""
     controller = get_controller()
-    
-    if controller._stop_latched:
-        raise HTTPException(
-            status_code=409,
-            detail="STOP is latched. Clear the latch first with POST /api/v1/stop/clear",
-        )
-    
-    success = controller.clock1_on()
-    if not success:
-        raise HTTPException(status_code=409, detail="Clock 1 could not be turned on")
-    
+    controller.clock1_on()
     return MessageResponse(message="Clock 1 is ON")
 
 @app.post("/api/v1/clock/1/off", response_model=MessageResponse)
@@ -281,17 +260,7 @@ async def clock1_off():
 async def clock2_on():
     """Turn on Clock 2."""
     controller = get_controller()
-    
-    if controller._stop_latched:
-        raise HTTPException(
-            status_code=409,
-            detail="STOP is latched. Clear the latch first with POST /api/v1/stop/clear",
-        )
-    
-    success = controller.clock2_on()
-    if not success:
-        raise HTTPException(status_code=409, detail="Clock 2 could not be turned on")
-    
+    controller.clock2_on()
     return MessageResponse(message="Clock 2 is ON")
 
 @app.post("/api/v1/clock/2/off", response_model=MessageResponse)
@@ -312,34 +281,14 @@ async def all_off():
 async def set_clock1_duty(request: DutyRequest):
     """Set duty cycle (0-100) for Clock 1."""
     controller = get_controller()
-    
-    if controller._stop_latched and request.duty > 0:
-        raise HTTPException(
-            status_code=409,
-            detail="STOP is latched. Clear the latch first with POST /api/v1/stop/clear",
-        )
-    
-    success = controller.set_clock1_duty(request.duty)
-    if not success:
-        raise HTTPException(status_code=409, detail="Could not set Clock 1 duty")
-    
+    controller.set_clock1_duty(request.duty)
     return MessageResponse(message=f"Clock 1 duty set to {request.duty}%")
 
 @app.post("/api/v1/clock/2/duty", response_model=MessageResponse)
 async def set_clock2_duty(request: DutyRequest):
     """Set duty cycle (0-100) for Clock 2."""
     controller = get_controller()
-    
-    if controller._stop_latched and request.duty > 0:
-        raise HTTPException(
-            status_code=409,
-            detail="STOP is latched. Clear the latch first with POST /api/v1/stop/clear",
-        )
-    
-    success = controller.set_clock2_duty(request.duty)
-    if not success:
-        raise HTTPException(status_code=409, detail="Could not set Clock 2 duty")
-    
+    controller.set_clock2_duty(request.duty)
     return MessageResponse(message=f"Clock 2 duty set to {request.duty}%")
 
 @app.post("/api/v1/stop/trigger", response_model=MessageResponse)
@@ -347,14 +296,7 @@ async def trigger_stop():
     """Manually trigger emergency stop (same as pressing STOP button)."""
     controller = get_controller()
     controller.trigger_stop()
-    return MessageResponse(message="STOP triggered - all clocks OFF, latch active")
-
-@app.post("/api/v1/stop/clear", response_model=MessageResponse)
-async def clear_stop():
-    """Clear the STOP latch, allowing clocks to be turned on again."""
-    controller = get_controller()
-    controller.clear_stop_latch()
-    return MessageResponse(message="STOP latch cleared")
+    return MessageResponse(message="STOP triggered - all clocks OFF")
 
 @app.get("/api/v1/time", response_model=TimeResponse)
 async def get_time():

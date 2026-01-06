@@ -116,12 +116,17 @@ jobs:
       - name: Install systemd service
         run: |
           sudo cp ${{ env.INSTALL_DIR }}/api/systemd/kalembang.service /etc/systemd/system/
+          sudo cp ${{ env.INSTALL_DIR }}/api/systemd/kalembang-gpio-safety.service /etc/systemd/system/
+          sudo cp ${{ env.INSTALL_DIR }}/api/systemd/kalembang-gpio-safety.timer /etc/systemd/system/
+          chmod +x ${{ env.INSTALL_DIR }}/api/scripts/gpio-safety.sh
           sudo systemctl daemon-reload
           sudo systemctl enable kalembang.service
+          sudo systemctl enable kalembang-gpio-safety.timer
 
       - name: Start service
         run: |
           sudo systemctl start kalembang.service
+          sudo systemctl start kalembang-gpio-safety.timer
           sleep 3
           sudo systemctl status kalembang.service
 

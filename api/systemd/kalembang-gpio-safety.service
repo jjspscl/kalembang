@@ -1,0 +1,11 @@
+[Unit]
+Description=Kalembang GPIO Safety Check
+After=network.target
+
+[Service]
+Type=oneshot
+User=orangepi
+ExecStart=/home/orangepi/kalembang/api/scripts/gpio-safety.sh check
+
+[Install]
+WantedBy=multi-user.target
