@@ -35,6 +35,7 @@ class DutyRequest(BaseModel):
     duty: int = Field(..., ge=0, le=100, description="Duty cycle percentage (0-100)")
 
 class StatusResponse(BaseModel):
+    """Response model for status endpoint."""
     clock1: dict[str, bool | int]
     clock2: dict[str, bool | int]
     stop_button_pressed: bool | None
@@ -80,26 +81,26 @@ class TimeResponse(BaseModel):
 async def stop_button_monitor():
     """
     Background task to monitor the STOP button.
-    
+
     When pressed, immediately stops all motors.
     """
     controller = get_controller()
     button_was_pressed = False
-    
+
     logger.info("STOP button monitor started")
-    
+
     while True:
         try:
             button_pressed = controller.read_stop_button()
-            
+
             if button_pressed and not button_was_pressed:
                 logger.warning("STOP button pressed - stopping all motors!")
                 controller.trigger_stop()
-            
+
             button_was_pressed = button_pressed
-            
+
             await asyncio.sleep(BUTTON_DEBOUNCE_TIME)
-            
+
         except GPIOError as e:
             logger.error("GPIO error in stop button monitor: %s", e)
             await asyncio.sleep(1.0)
@@ -115,17 +116,17 @@ _alarm_off_tasks: dict[int, asyncio.Task[None]] = {}
 async def alarm_scheduler():
     """
     Background task to check and trigger alarms.
-    
+
     Runs every second and checks if any enabled alarm matches the current time.
     """
     logger.info("Alarm scheduler started")
-    
+
     while True:
         try:
             now = datetime.now()
             db = get_db()
             controller = get_controller()
-            
+
             enabled_alarms = db.get_enabled_alarms()
             for alarm in enabled_alarms:
                 if alarm.id is None:
@@ -133,22 +134,23 @@ async def alarm_scheduler():
                 alarm_id = alarm.id
                 if alarm.matches_time(now):
                     logger.info("Triggering alarm: %s (clock %d)", alarm.name, alarm.clock_id)
-                    
+
                     if alarm.clock_id == 1:
                         controller.clock1_on()
                     else:
                         controller.clock2_on()
-                    
+
                     db.mark_triggered(alarm_id)
-                    
+
                     if alarm.days == "once":
                         db.disable_once_alarm(alarm_id)
-                    
+
                     if alarm.duration > 0:
                         if alarm_id in _alarm_off_tasks:
                             _alarm_off_tasks[alarm_id].cancel()
-                        
+
                         async def auto_off(clock_id: int, aid: int, duration: int) -> None:
+                            """Turn off clock after duration."""
                             await asyncio.sleep(duration)
                             ctrl = get_controller()
                             if clock_id == 1:
@@ -157,12 +159,12 @@ async def alarm_scheduler():
                                 ctrl.clock2_off()
                             logger.info("Alarm %d auto-off after %ds", aid, duration)
                             _alarm_off_tasks.pop(aid, None)
-                        
+
                         task = asyncio.create_task(auto_off(alarm.clock_id, alarm_id, alarm.duration))
                         _alarm_off_tasks[alarm_id] = task
-            
+
             await asyncio.sleep(1.0 - (datetime.now().microsecond / 1_000_000))
-            
+
         except asyncio.CancelledError:
             logger.info("Alarm scheduler stopped")
             raise
@@ -172,50 +174,49 @@ async def alarm_scheduler():
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
+    """Application lifespan manager for startup and shutdown."""
     logger.info("Kalembang starting up...")
-    
+
     use_mock = os.environ.get("KALEMBANG_MOCK_GPIO", "").lower() in ("1", "true", "yes")
-    
+
     tasks: list[asyncio.Task[None]] = []
-    
+
     try:
         controller = get_controller(use_mock=use_mock)
         controller.initialize()
-        
+
         get_db()
-        
+
         if STOP_BUTTON_ENABLED:
             monitor_task = asyncio.create_task(stop_button_monitor())
             tasks.append(monitor_task)
-        
+
         scheduler_task = asyncio.create_task(alarm_scheduler())
         tasks.append(scheduler_task)
-        
+
         logger.info("Kalembang ready on %s:%d", API_HOST, API_PORT)
-        
+
     except GPIOError as e:
         logger.error("GPIO initialization failed: %s", e)
         logger.info("Tip: Set KALEMBANG_MOCK_GPIO=1 to run without hardware")
         raise
-    
+
     yield
-    
+
     logger.info("Kalembang shutting down...")
-    
+
     for task in tasks:
         task.cancel()
         try:
             await task
         except asyncio.CancelledError:
             pass
-    
+
     for task in _alarm_off_tasks.values():
         task.cancel()
     _alarm_off_tasks.clear()
-    
-    close_db()
-    
-    controller.cleanup()
+
+    close_db()    controller.cleanup()
     logger.info("Kalembang shutdown complete")
 
 app = FastAPI(
@@ -309,6 +310,7 @@ async def get_time():
     )
 
 def _alarm_to_response(alarm: Alarm) -> AlarmResponse:
+    """Convert Alarm dataclass to AlarmResponse."""
     if alarm.id is None:
         raise ValueError("Alarm must have an id")
     return AlarmResponse(
@@ -336,7 +338,7 @@ async def list_alarms():
 async def create_alarm(request: AlarmRequest):
     """Create a new alarm."""
     db = get_db()
-    
+
     alarm = Alarm(
         id=None,
         name=request.name,
@@ -348,7 +350,7 @@ async def create_alarm(request: AlarmRequest):
         days=request.days,
         duration=request.duration,
     )
-    
+
     created = db.create_alarm(alarm)
     return _alarm_to_response(created)
 
@@ -357,21 +359,21 @@ async def get_alarm(alarm_id: int):
     """Get an alarm by ID."""
     db = get_db()
     alarm = db.get_alarm(alarm_id)
-    
+
     if not alarm:
         raise HTTPException(status_code=404, detail="Alarm not found")
-    
+
     return _alarm_to_response(alarm)
 
 @app.put("/api/v1/alarms/{alarm_id}", response_model=AlarmResponse)
 async def update_alarm(alarm_id: int, request: AlarmRequest):
     """Update an existing alarm."""
     db = get_db()
-    
+
     existing = db.get_alarm(alarm_id)
     if not existing:
         raise HTTPException(status_code=404, detail="Alarm not found")
-    
+
     alarm = Alarm(
         id=alarm_id,
         name=request.name,
@@ -385,7 +387,7 @@ async def update_alarm(alarm_id: int, request: AlarmRequest):
         created_at=existing.created_at,
         last_triggered=existing.last_triggered,
     )
-    
+
     updated = db.update_alarm(alarm)
     if updated is None:
         raise HTTPException(status_code=500, detail="Failed to update alarm")
@@ -393,22 +395,24 @@ async def update_alarm(alarm_id: int, request: AlarmRequest):
 
 @app.delete("/api/v1/alarms/{alarm_id}", response_model=MessageResponse)
 async def delete_alarm(alarm_id: int):
+    """Delete an alarm."""
     db = get_db()
-    
+
     deleted = db.delete_alarm(alarm_id)
     if not deleted:
         raise HTTPException(status_code=404, detail="Alarm not found")
-    
+
     return MessageResponse(message=f"Alarm {alarm_id} deleted")
 
 @app.patch("/api/v1/alarms/{alarm_id}/toggle", response_model=AlarmResponse)
 async def toggle_alarm(alarm_id: int, enabled: bool):
+    """Enable or disable an alarm."""
     db = get_db()
-    
+
     alarm = db.toggle_alarm(alarm_id, enabled)
     if alarm is None:
         raise HTTPException(status_code=404, detail="Alarm not found")
-    
+
     return _alarm_to_response(alarm)
 
 @app.get("/health")
@@ -420,9 +424,10 @@ CLIENT_DIR = Path(__file__).parent.parent.parent / "client-dist"
 
 if CLIENT_DIR.exists():
     app.mount("/assets", StaticFiles(directory=CLIENT_DIR / "assets"), name="assets")
-    
+
     @app.get("/{path:path}")
     async def serve_spa(_request: Request, path: str):
+        """Serve the SPA for all non-API routes."""
         file_path = CLIENT_DIR / path
         if file_path.exists() and file_path.is_file():
             return FileResponse(file_path)

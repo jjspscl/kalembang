@@ -219,11 +219,12 @@ class MotorController:
         logger.info("All clocks OFF")
 
     def set_clock1_duty(self, duty: int) -> None:
+        """Set duty cycle for Clock 1 (0-100)."""
         self._ensure_initialized()
         if self._pwm1 is None:
             raise GPIOError("PWM not initialized")
         self._clock1_duty = max(0, min(100, duty))
-        
+
         if self._clock1_enabled:
             if self._clock1_duty == 0:
                 self.clock1_off()
@@ -234,15 +235,16 @@ class MotorController:
                 self._pwm1.set_duty(self._clock1_duty)
                 if not self._pwm1.is_running:
                     self._pwm1.start()
-        
+
         logger.info("Clock 1 duty set to %d%%", self._clock1_duty)
 
     def set_clock2_duty(self, duty: int) -> None:
+        """Set duty cycle for Clock 2 (0-100)."""
         self._ensure_initialized()
         if self._pwm2 is None:
             raise GPIOError("PWM not initialized")
         self._clock2_duty = max(0, min(100, duty))
-        
+
         if self._clock2_enabled:
             if self._clock2_duty == 0:
                 self.clock2_off()
@@ -253,7 +255,7 @@ class MotorController:
                 self._pwm2.set_duty(self._clock2_duty)
                 if not self._pwm2.is_running:
                     self._pwm2.start()
-        
+
         logger.info("Clock 2 duty set to %d%%", self._clock2_duty)
 
     def read_stop_button(self) -> bool:
