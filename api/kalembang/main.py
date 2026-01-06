@@ -83,7 +83,9 @@ async def stop_button_monitor():
     """
     Background task to monitor the STOP button.
     
-    When pressed, immediately stops all motors and sets the latch.
+    When pressed:
+    - If not latched: triggers emergency stop and sets the latch
+    - If latched: clears the latch
     """
     controller = get_controller()
     button_was_pressed = False
@@ -95,8 +97,12 @@ async def stop_button_monitor():
             button_pressed = controller.read_stop_button()
             
             if button_pressed and not button_was_pressed:
-                logger.warning("STOP button pressed!")
-                controller.trigger_stop()
+                if controller._stop_latched:
+                    logger.info("STOP button pressed - clearing latch")
+                    controller.clear_stop()
+                else:
+                    logger.warning("STOP button pressed - triggering stop!")
+                    controller.trigger_stop()
             
             button_was_pressed = button_pressed
             
