@@ -111,6 +111,43 @@ The demo uses simulated data and runs entirely in the browser.
 - 4.7kΩ pulldown resistors (x6)
 - 5V/4A power supply
 
+## 🍊 Orange Pi 5 Setup
+
+### Prerequisites
+
+Install required packages on your Orange Pi 5:
+
+```bash
+sudo apt update && sudo apt install -y python3.11-venv
+```
+
+### Self-Hosted Runner Permissions
+
+The GitHub Actions self-hosted runner needs passwordless sudo for systemctl commands. Run as root:
+
+```bash
+sudo tee /etc/sudoers.d/kalembang-deploy > /dev/null << 'EOF'
+orangepi ALL=(ALL) NOPASSWD: /usr/bin/systemctl stop kalembang.service
+orangepi ALL=(ALL) NOPASSWD: /usr/bin/systemctl start kalembang.service
+orangepi ALL=(ALL) NOPASSWD: /usr/bin/systemctl enable kalembang.service
+orangepi ALL=(ALL) NOPASSWD: /usr/bin/systemctl status kalembang.service
+orangepi ALL=(ALL) NOPASSWD: /usr/bin/systemctl daemon-reload
+orangepi ALL=(ALL) NOPASSWD: /bin/cp * /etc/systemd/system/kalembang.service
+orangepi ALL=(ALL) NOPASSWD: /usr/bin/journalctl -u kalembang *
+EOF
+sudo chmod 440 /etc/sudoers.d/kalembang-deploy
+```
+
+### GPIO Access
+
+Ensure the `orangepi` user has access to GPIO. wiringOP should be pre-installed on Orange Pi OS.
+
+```bash
+gpio readall
+```
+
+See [docs/pinmap.md](docs/pinmap.md) for pin mapping and [docs/wiring.md](docs/wiring.md) for wiring reference.
+
 ## 📄 License
 
 MIT

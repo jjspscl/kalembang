@@ -12,8 +12,12 @@ from contextlib import asynccontextmanager
 from datetime import datetime
 from typing import Optional
 
-from fastapi import FastAPI, HTTPException
+from pathlib import Path
+
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
 from .config import API_HOST, API_PORT, STOP_LATCH, BUTTON_DEBOUNCE_TIME
@@ -465,6 +469,18 @@ async def toggle_alarm(alarm_id: int, enabled: bool):
 async def health():
     """Health check endpoint."""
     return {"status": "ok"}
+
+CLIENT_DIR = Path(__file__).parent.parent.parent / "client-dist"
+
+if CLIENT_DIR.exists():
+    app.mount("/assets", StaticFiles(directory=CLIENT_DIR / "assets"), name="assets")
+    
+    @app.get("/{path:path}")
+    async def serve_spa(request: Request, path: str):
+        file_path = CLIENT_DIR / path
+        if file_path.exists() and file_path.is_file():
+            return FileResponse(file_path)
+        return FileResponse(CLIENT_DIR / "index.html")
 
 if __name__ == "__main__":
     import uvicorn
