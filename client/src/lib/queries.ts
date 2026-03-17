@@ -185,7 +185,7 @@ export function useToggleAllAlarms() {
     }) => {
       const ids = alarms
         .filter((alarm) => alarm.id !== null && alarm.enabled !== enabled)
-        .map((alarm) => alarm.id as number);
+        .map((alarm) => alarm.id!);
 
       await Promise.all(ids.map((id) => alarmApi.toggle(id, enabled)));
     },

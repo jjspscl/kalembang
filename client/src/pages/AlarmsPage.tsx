@@ -43,7 +43,7 @@ export function AlarmsPage() {
   };
 
   const allDisabled = alarms?.every((alarm) => !alarm.enabled) ?? false;
-  const awakeSleepingLabel = allDisabled ? "I'm sleeping" : "I'm awake";
+  const toggleButtonLabel = allDisabled ? "I'm sleeping" : "I'm awake";
 
   const handleToggleAll = () => {
     if (!alarms || alarms.length === 0) {
@@ -84,7 +84,7 @@ export function AlarmsPage() {
             onClick={handleToggleAll}
             disabled={toggleAllAlarms.isPending || !alarms?.length}
           >
-            {awakeSleepingLabel}
+            {toggleButtonLabel}
           </motion.button>
           <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
             <Link to="/alarms/new" className="btn btn-primary">
