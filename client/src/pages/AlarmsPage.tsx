@@ -4,6 +4,7 @@ import {
   useAlarms,
   useDeleteAlarm,
   useToggleAlarm,
+  useToggleAllAlarms,
   useCreateAlarm,
 } from "../lib";
 import { AlarmItem } from "../components/AlarmItem";
@@ -12,6 +13,7 @@ export function AlarmsPage() {
   const { data: alarms, isLoading, error } = useAlarms();
   const deleteAlarm = useDeleteAlarm();
   const toggleAlarm = useToggleAlarm();
+  const toggleAllAlarms = useToggleAllAlarms();
   const createAlarm = useCreateAlarm();
 
   if (isLoading) {
@@ -40,6 +42,16 @@ export function AlarmsPage() {
     toggleAlarm.mutate({ id, enabled });
   };
 
+  const allDisabled = alarms?.every((alarm) => !alarm.enabled) ?? false;
+  const toggleButtonLabel = allDisabled ? "I'm sleeping" : "I'm awake";
+
+  const handleToggleAll = () => {
+    if (!alarms || alarms.length === 0) {
+      return;
+    }
+    toggleAllAlarms.mutate({ alarms, enabled: allDisabled });
+  };
+
   const handleDuplicate = (
     alarm: typeof alarms extends (infer T)[] | undefined ? T : never
   ) => {
@@ -64,11 +76,22 @@ export function AlarmsPage() {
         transition={{ duration: 0.3 }}
       >
         <h2>Alarms</h2>
-        <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
-          <Link to="/alarms/new" className="btn btn-primary">
-            + New Alarm
-          </Link>
-        </motion.div>
+        <div style={{ display: "flex", gap: "0.75rem" }}>
+          <motion.button
+            className="btn btn-secondary"
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+            onClick={handleToggleAll}
+            disabled={toggleAllAlarms.isPending || !alarms?.length}
+          >
+            {toggleButtonLabel}
+          </motion.button>
+          <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
+            <Link to="/alarms/new" className="btn btn-primary">
+              + New Alarm
+            </Link>
+          </motion.div>
+        </div>
       </motion.div>
 
       {alarms && alarms.length === 0 ? (

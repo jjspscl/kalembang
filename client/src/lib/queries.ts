@@ -171,3 +171,26 @@ export function useToggleAlarm() {
     },
   });
 }
+
+export function useToggleAllAlarms() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      alarms,
+      enabled,
+    }: {
+      alarms: Alarm[];
+      enabled: boolean;
+    }) => {
+      const ids = alarms
+        .filter((alarm) => alarm.id !== null && alarm.enabled !== enabled)
+        .map((alarm) => alarm.id!);
+
+      await Promise.all(ids.map((id) => alarmApi.toggle(id, enabled)));
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.alarms });
+    },
+  });
+}
