@@ -1079,6 +1079,39 @@ h2 {
   color: #60a5fa;
 }
 
+.method-patch {
+  background-color: rgba(168, 85, 247, 0.15);
+  color: #a78bfa;
+}
+
+.method-delete {
+  background-color: rgba(239, 68, 68, 0.15);
+  color: #f87171;
+}
+
+.endpoint-group-header {
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #64748b;
+  padding-top: 0.5rem;
+}
+
+.endpoint-list > div:first-child > .endpoint-group-header {
+  padding-top: 0;
+}
+
+.endpoint-id-tip {
+  font-size: 0.8rem;
+  color: #94a3b8;
+  background-color: rgba(168, 85, 247, 0.08);
+  border: 1px solid rgba(168, 85, 247, 0.15);
+  border-radius: 8px;
+  padding: 0.625rem 0.875rem;
+  line-height: 1.5;
+}
+
 .endpoint-url-row {
   display: flex;
   align-items: center;
