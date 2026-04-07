@@ -23,10 +23,12 @@ class Alarm:
     hour: int  # 0-23
     minute: int  # 0-59
     second: int  # 0-59 (default 0)
-    clock_id: int  # 1 or 2 (which clock to trigger)
+    clock_id: int  # 1 or 2 (which clock to trigger, used for clock1/clock2 modes)
     enabled: bool
     days: str  # Comma-separated days: "mon,tue,wed,thu,fri,sat,sun" or "daily" or "once"
     duration: int  # How long to ring in seconds (0 = until manually stopped)
+    mode: str = "clock1"  # "clock1", "clock2", or "pattern"
+    pattern: Optional[str] = None  # JSON pattern data when mode="pattern"
     created_at: Optional[str] = None
     last_triggered: Optional[str] = None
 
@@ -37,16 +39,16 @@ class Alarm:
         """Check if this alarm should trigger at the given time."""
         if not self.enabled:
             return False
-        
+
         if now.hour != self.hour or now.minute != self.minute or now.second != self.second:
             return False
-        
+
         day_map = {
             0: "mon", 1: "tue", 2: "wed", 3: "thu",
             4: "fri", 5: "sat", 6: "sun"
         }
         current_day = day_map[now.weekday()]
-        
+
         if self.days == "daily":
             return True
         elif self.days == "once":
@@ -65,7 +67,7 @@ class Database:
     def connect(self) -> None:
         """Connect to the database and initialize schema."""
         Path(self.db_path).parent.mkdir(parents=True, exist_ok=True)
-        
+
         self._conn = sqlite3.connect(self.db_path, check_same_thread=False)
         self._init_schema()
         logger.info(f"Database connected: {self.db_path}")
@@ -83,10 +85,28 @@ class Database:
                 enabled INTEGER NOT NULL DEFAULT 1,
                 days TEXT NOT NULL DEFAULT 'daily',
                 duration INTEGER NOT NULL DEFAULT 30,
+                mode TEXT NOT NULL DEFAULT 'clock1' CHECK(mode IN ('clock1', 'clock2', 'pattern')),
+                pattern TEXT,
                 created_at TEXT NOT NULL DEFAULT (datetime('now')),
                 last_triggered TEXT
             )
         """)
+        self._conn.commit()
+        self._migrate_schema()
+
+    def _migrate_schema(self) -> None:
+        """Run database migrations for new columns."""
+        cursor = self._conn.execute("PRAGMA table_info(alarms)")
+        columns = [row[1] for row in cursor.fetchall()]
+
+        if "mode" not in columns:
+            self._conn.execute("ALTER TABLE alarms ADD COLUMN mode TEXT NOT NULL DEFAULT 'clock1'")
+            logger.info("Added 'mode' column to alarms table")
+
+        if "pattern" not in columns:
+            self._conn.execute("ALTER TABLE alarms ADD COLUMN pattern TEXT")
+            logger.info("Added 'pattern' column to alarms table")
+
         self._conn.commit()
 
     def close(self) -> None:
@@ -98,22 +118,23 @@ class Database:
     def create_alarm(self, alarm: Alarm) -> Alarm:
         """Create a new alarm."""
         cursor = self._conn.execute("""
-            INSERT INTO alarms (name, hour, minute, second, clock_id, enabled, days, duration)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO alarms (name, hour, minute, second, clock_id, enabled, days, duration, mode, pattern)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             alarm.name, alarm.hour, alarm.minute, alarm.second,
-            alarm.clock_id, int(alarm.enabled), alarm.days, alarm.duration
+            alarm.clock_id, int(alarm.enabled), alarm.days, alarm.duration,
+            alarm.mode, alarm.pattern
         ))
         self._conn.commit()
-        
+
         alarm.id = cursor.lastrowid
-        
+
         row = self._conn.execute(
             "SELECT created_at FROM alarms WHERE id = ?", (alarm.id,)
         ).fetchone()
         alarm.created_at = row[0] if row else None
-        
-        logger.info(f"Created alarm: {alarm.name} at {alarm.hour:02d}:{alarm.minute:02d}:{alarm.second:02d}")
+
+        logger.info(f"Created alarm: {alarm.name} at {alarm.hour:02d}:{alarm.minute:02d}:{alarm.second:02d} (mode={alarm.mode})")
         return alarm
 
     def get_alarm(self, alarm_id: int) -> Optional[Alarm]:
@@ -121,7 +142,7 @@ class Database:
         row = self._conn.execute(
             "SELECT * FROM alarms WHERE id = ?", (alarm_id,)
         ).fetchone()
-        
+
         if row:
             return self._row_to_alarm(row)
         return None
@@ -144,27 +165,29 @@ class Database:
         """Update an existing alarm."""
         if alarm.id is None:
             return None
-        
+
         self._conn.execute("""
             UPDATE alarms SET
                 name = ?, hour = ?, minute = ?, second = ?,
-                clock_id = ?, enabled = ?, days = ?, duration = ?
+                clock_id = ?, enabled = ?, days = ?, duration = ?,
+                mode = ?, pattern = ?
             WHERE id = ?
         """, (
             alarm.name, alarm.hour, alarm.minute, alarm.second,
             alarm.clock_id, int(alarm.enabled), alarm.days, alarm.duration,
+            alarm.mode, alarm.pattern,
             alarm.id
         ))
         self._conn.commit()
-        
-        logger.info(f"Updated alarm {alarm.id}: {alarm.name}")
+
+        logger.info(f"Updated alarm {alarm.id}: {alarm.name} (mode={alarm.mode})")
         return self.get_alarm(alarm.id)
 
     def delete_alarm(self, alarm_id: int) -> bool:
         """Delete an alarm."""
         cursor = self._conn.execute("DELETE FROM alarms WHERE id = ?", (alarm_id,))
         self._conn.commit()
-        
+
         deleted = cursor.rowcount > 0
         if deleted:
             logger.info(f"Deleted alarm {alarm_id}")
@@ -207,8 +230,10 @@ class Database:
             enabled=bool(row[6]),
             days=row[7],
             duration=row[8],
-            created_at=row[9],
-            last_triggered=row[10],
+            mode=row[9] if len(row) > 9 and row[9] else "clock1",
+            pattern=row[10] if len(row) > 10 else None,
+            created_at=row[11] if len(row) > 11 else None,
+            last_triggered=row[12] if len(row) > 12 else None,
         )
 
 _db: Optional[Database] = None

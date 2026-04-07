@@ -23,6 +23,13 @@ from pydantic import BaseModel, Field
 from .config import API_HOST, API_PORT, BUTTON_DEBOUNCE_TIME, STOP_BUTTON_ENABLED
 from .gpio import get_controller, GPIOError
 from .database import get_db, close_db, Alarm
+from .patterns import (
+    get_preset_patterns,
+    get_preset_pattern,
+    get_pattern_player,
+    Pattern,
+    PRESET_PATTERNS,
+)
 
 logging.basicConfig(
     level=logging.INFO,
@@ -55,6 +62,8 @@ class AlarmRequest(BaseModel):
     enabled: bool = True
     days: str = Field(default="daily")
     duration: int = Field(default=30, ge=0)
+    mode: str = Field(default="clock1", pattern="^(clock1|clock2|pattern)$")
+    pattern: Optional[str] = Field(default=None)
 
 class AlarmResponse(BaseModel):
     """Response model for alarm endpoints."""
@@ -67,6 +76,8 @@ class AlarmResponse(BaseModel):
     enabled: bool
     days: str
     duration: int
+    mode: str
+    pattern: Optional[str]
     created_at: Optional[str]
     last_triggered: Optional[str]
 
@@ -112,12 +123,14 @@ async def stop_button_monitor():
             await asyncio.sleep(1.0)
 
 _alarm_off_tasks: dict[int, asyncio.Task[None]] = {}
+_pattern_tasks: dict[int, asyncio.Task[None]] = {}
 
 async def alarm_scheduler():
     """
     Background task to check and trigger alarms.
 
     Runs every second and checks if any enabled alarm matches the current time.
+    Supports three modes: clock1, clock2, and pattern.
     """
     logger.info("Alarm scheduler started")
 
@@ -133,35 +146,53 @@ async def alarm_scheduler():
                     continue
                 alarm_id = alarm.id
                 if alarm.matches_time(now):
-                    logger.info("Triggering alarm: %s (clock %d)", alarm.name, alarm.clock_id)
-
-                    if alarm.clock_id == 1:
-                        controller.clock1_on()
-                    else:
-                        controller.clock2_on()
+                    logger.info("Triggering alarm: %s (mode=%s)", alarm.name, alarm.mode)
 
                     db.mark_triggered(alarm_id)
 
                     if alarm.days == "once":
                         db.disable_once_alarm(alarm_id)
 
-                    if alarm.duration > 0:
-                        if alarm_id in _alarm_off_tasks:
-                            _alarm_off_tasks[alarm_id].cancel()
+                    if alarm.mode == "pattern" and alarm.pattern:
+                        if alarm_id in _pattern_tasks:
+                            _pattern_tasks[alarm_id].cancel()
 
-                        async def auto_off(clock_id: int, aid: int, duration: int) -> None:
-                            """Turn off clock after duration."""
-                            await asyncio.sleep(duration)
-                            ctrl = get_controller()
-                            if clock_id == 1:
-                                ctrl.clock1_off()
-                            else:
-                                ctrl.clock2_off()
-                            logger.info("Alarm %d auto-off after %ds", aid, duration)
-                            _alarm_off_tasks.pop(aid, None)
+                        async def play_pattern(aid: int, pattern_json: str) -> None:
+                            try:
+                                player = get_pattern_player(controller)
+                                await player.play_json(pattern_json)
+                            except Exception as e:
+                                logger.error("Pattern playback error for alarm %d: %s", aid, e)
+                            finally:
+                                _pattern_tasks.pop(aid, None)
 
-                        task = asyncio.create_task(auto_off(alarm.clock_id, alarm_id, alarm.duration))
-                        _alarm_off_tasks[alarm_id] = task
+                        task = asyncio.create_task(play_pattern(alarm_id, alarm.pattern))
+                        _pattern_tasks[alarm_id] = task
+
+                    else:
+                        clock_id = 1 if alarm.mode == "clock1" else 2
+
+                        if clock_id == 1:
+                            controller.clock1_on()
+                        else:
+                            controller.clock2_on()
+
+                        if alarm.duration > 0:
+                            if alarm_id in _alarm_off_tasks:
+                                _alarm_off_tasks[alarm_id].cancel()
+
+                            async def auto_off(cid: int, aid: int, dur: int) -> None:
+                                await asyncio.sleep(dur)
+                                ctrl = get_controller()
+                                if cid == 1:
+                                    ctrl.clock1_off()
+                                else:
+                                    ctrl.clock2_off()
+                                logger.info("Alarm %d auto-off after %ds", aid, dur)
+                                _alarm_off_tasks.pop(aid, None)
+
+                            task = asyncio.create_task(auto_off(clock_id, alarm_id, alarm.duration))
+                            _alarm_off_tasks[alarm_id] = task
 
             await asyncio.sleep(1.0 - (datetime.now().microsecond / 1_000_000))
 
@@ -215,6 +246,10 @@ async def lifespan(_app: FastAPI):
     for task in _alarm_off_tasks.values():
         task.cancel()
     _alarm_off_tasks.clear()
+
+    for task in _pattern_tasks.values():
+        task.cancel()
+    _pattern_tasks.clear()
 
     close_db()
     controller.cleanup()
@@ -311,22 +346,7 @@ async def get_time():
     )
 
 def _alarm_to_response(alarm: Alarm) -> AlarmResponse:
-    """Convert Alarm dataclass to AlarmResponse."""
-    if alarm.id is None:
-        raise ValueError("Alarm must have an id")
-    return AlarmResponse(
-        id=alarm.id,
-        name=alarm.name,
-        hour=alarm.hour,
-        minute=alarm.minute,
-        second=alarm.second,
-        clock_id=alarm.clock_id,
-        enabled=alarm.enabled,
-        days=alarm.days,
-        duration=alarm.duration,
-        created_at=alarm.created_at,
-        last_triggered=alarm.last_triggered,
-    )
+    \"\"\"Convert Alarm dataclass to AlarmResponse.\"\"\"\n    if alarm.id is None:\n        raise ValueError(\"Alarm must have an id\")\n    return AlarmResponse(\n        id=alarm.id,\n        name=alarm.name,\n        hour=alarm.hour,\n        minute=alarm.minute,\n        second=alarm.second,\n        clock_id=alarm.clock_id,\n        enabled=alarm.enabled,\n        days=alarm.days,\n        duration=alarm.duration,\n        mode=alarm.mode,\n        pattern=alarm.pattern,\n        created_at=alarm.created_at,\n        last_triggered=alarm.last_triggered,\n    )
 
 @app.get("/api/v1/alarms", response_model=list[AlarmResponse])
 async def list_alarms():
@@ -350,6 +370,8 @@ async def create_alarm(request: AlarmRequest):
         enabled=request.enabled,
         days=request.days,
         duration=request.duration,
+        mode=request.mode,
+        pattern=request.pattern,
     )
 
     created = db.create_alarm(alarm)
@@ -385,6 +407,8 @@ async def update_alarm(alarm_id: int, request: AlarmRequest):
         enabled=request.enabled,
         days=request.days,
         duration=request.duration,
+        mode=request.mode,
+        pattern=request.pattern,
         created_at=existing.created_at,
         last_triggered=existing.last_triggered,
     )
@@ -415,6 +439,81 @@ async def toggle_alarm(alarm_id: int, enabled: bool):
         raise HTTPException(status_code=404, detail="Alarm not found")
 
     return _alarm_to_response(alarm)
+
+class PatternEventModel(BaseModel):
+    clock: int = Field(..., ge=1, le=2)
+    time: float = Field(..., ge=0)
+    duration: float = Field(..., gt=0)
+    duty: int = Field(..., ge=0, le=100)
+
+class PatternModel(BaseModel):
+    name: str = Field(default="Custom Pattern")
+    totalDuration: float = Field(..., gt=0)
+    events: list[PatternEventModel]
+
+class PatternResponse(BaseModel):
+    id: str
+    name: str
+    description: str
+    totalDuration: float
+    events: list[dict]
+
+class PatternTestRequest(BaseModel):
+    pattern: PatternModel
+
+@app.get("/api/v1/patterns/presets", response_model=list[PatternResponse])
+async def list_preset_patterns():
+    """Get all preset patterns."""
+    presets = get_preset_patterns()
+    return [
+        PatternResponse(
+            id=p.id,
+            name=p.name,
+            description=p.description,
+            totalDuration=p.total_duration,
+            events=p.events,
+        )
+        for p in presets
+    ]
+
+@app.get("/api/v1/patterns/presets/{pattern_id}", response_model=PatternResponse)
+async def get_preset(pattern_id: str):
+    """Get a specific preset pattern by ID."""
+    preset = get_preset_pattern(pattern_id)
+    if not preset:
+        raise HTTPException(status_code=404, detail="Pattern not found")
+    return PatternResponse(
+        id=preset.id,
+        name=preset.name,
+        description=preset.description,
+        totalDuration=preset.total_duration,
+        events=preset.events,
+    )
+
+@app.post("/api/v1/patterns/test", response_model=MessageResponse)
+async def test_pattern(request: PatternTestRequest):
+    """Test play a pattern immediately."""
+    controller = get_controller()
+    player = get_pattern_player(controller)
+
+    pattern = Pattern(
+        id="test",
+        name=request.pattern.name,
+        description="Test pattern",
+        total_duration=request.pattern.totalDuration,
+        events=[e.model_dump() for e in request.pattern.events],
+    )
+
+    asyncio.create_task(player.play(pattern))
+    return MessageResponse(message=f"Pattern '{pattern.name}' started")
+
+@app.post("/api/v1/patterns/stop", response_model=MessageResponse)
+async def stop_pattern():
+    """Stop any currently playing pattern."""
+    controller = get_controller()
+    player = get_pattern_player(controller)
+    await player.stop()
+    return MessageResponse(message="Pattern stopped")
 
 @app.get("/health")
 async def health():
