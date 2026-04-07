@@ -13,11 +13,18 @@ export interface ClockStatus {
   duty: number;
 }
 
+export interface ActiveAlarm {
+  id: number;
+  name: string;
+  clock_id: number;
+}
+
 export interface Status {
   clock1: ClockStatus;
   clock2: ClockStatus;
   stop_button_pressed: boolean | null;
-  current_time: string;
+  current_time?: string;
+  active_alarms: ActiveAlarm[];
 }
 
 export interface ApiResponse {
@@ -78,7 +85,11 @@ export interface ServerTime {
 }
 
 export class ApiError extends Error {
-  constructor(message: string, public status: number, public detail?: string) {
+  constructor(
+    message: string,
+    public status: number,
+    public detail?: string,
+  ) {
     super(message);
     this.name = "ApiError";
   }
@@ -86,7 +97,7 @@ export class ApiError extends Error {
 
 async function request<T>(
   endpoint: string,
-  options: RequestInit = {}
+  options: RequestInit = {},
 ): Promise<T> {
   const url = `${API_BASE}${endpoint}`;
 
@@ -107,7 +118,7 @@ async function request<T>(
     throw new ApiError(
       `API request failed: ${response.status}`,
       response.status,
-      detail
+      detail,
     );
   }
 
