@@ -35,6 +35,8 @@ export interface Alarm {
   enabled: boolean;
   days: string;
   duration: number;
+  mode: "clock1" | "clock2" | "pattern";
+  pattern?: string | null;
   created_at?: string;
   last_triggered?: string;
 }
@@ -48,6 +50,23 @@ export interface AlarmCreate {
   enabled?: boolean;
   days?: string;
   duration?: number;
+  mode?: "clock1" | "clock2" | "pattern";
+  pattern?: string | null;
+}
+
+export interface PatternEvent {
+  clock: 1 | 2;
+  time: number;
+  duration: number;
+  duty: number;
+}
+
+export interface Pattern {
+  id: string;
+  name: string;
+  description: string;
+  totalDuration: number;
+  events: PatternEvent[];
 }
 
 export interface ServerTime {
