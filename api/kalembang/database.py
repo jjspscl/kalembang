@@ -15,9 +15,11 @@ from .config import DATABASE_PATH
 
 logger = logging.getLogger(__name__)
 
+
 @dataclass
 class Alarm:
     """Alarm data model."""
+
     id: Optional[int]
     name: str
     hour: int  # 0-23
@@ -25,7 +27,9 @@ class Alarm:
     second: int  # 0-59 (default 0)
     clock_id: int  # 1 or 2 (which clock to trigger, used for clock1/clock2 modes)
     enabled: bool
-    days: str  # Comma-separated days: "mon,tue,wed,thu,fri,sat,sun" or "daily" or "once"
+    days: (
+        str  # Comma-separated days: "mon,tue,wed,thu,fri,sat,sun" or "daily" or "once"
+    )
     duration: int  # How long to ring in seconds (0 = until manually stopped)
     mode: str = "clock1"  # "clock1", "clock2", or "pattern"
     pattern: Optional[str] = None  # JSON pattern data when mode="pattern"
@@ -35,27 +39,36 @@ class Alarm:
     def to_dict(self) -> dict:
         return asdict(self)
 
+    WEEKDAY_SET = {"mon", "tue", "wed", "thu", "fri"}
+    WEEKEND_SET = {"sat", "sun"}
+
     def matches_time(self, now: datetime) -> bool:
         """Check if this alarm should trigger at the given time."""
         if not self.enabled:
             return False
 
-        if now.hour != self.hour or now.minute != self.minute or now.second != self.second:
+        if (
+            now.hour != self.hour
+            or now.minute != self.minute
+            or now.second != self.second
+        ):
             return False
 
-        day_map = {
-            0: "mon", 1: "tue", 2: "wed", 3: "thu",
-            4: "fri", 5: "sat", 6: "sun"
-        }
+        day_map = {0: "mon", 1: "tue", 2: "wed", 3: "thu", 4: "fri", 5: "sat", 6: "sun"}
         current_day = day_map[now.weekday()]
 
-        if self.days == "daily":
+        if self.days in ("daily", "everyday"):
             return True
         elif self.days == "once":
-            return True  # Will be disabled after triggering
+            return True
+        elif self.days == "weekdays":
+            return current_day in self.WEEKDAY_SET
+        elif self.days == "weekends":
+            return current_day in self.WEEKEND_SET
         else:
             allowed_days = [d.strip().lower() for d in self.days.split(",")]
             return current_day in allowed_days
+
 
 class Database:
     """Database manager for alarms."""
@@ -100,7 +113,9 @@ class Database:
         columns = [row[1] for row in cursor.fetchall()]
 
         if "mode" not in columns:
-            self._conn.execute("ALTER TABLE alarms ADD COLUMN mode TEXT NOT NULL DEFAULT 'clock1'")
+            self._conn.execute(
+                "ALTER TABLE alarms ADD COLUMN mode TEXT NOT NULL DEFAULT 'clock1'"
+            )
             logger.info("Added 'mode' column to alarms table")
 
         if "pattern" not in columns:
@@ -117,14 +132,24 @@ class Database:
 
     def create_alarm(self, alarm: Alarm) -> Alarm:
         """Create a new alarm."""
-        cursor = self._conn.execute("""
+        cursor = self._conn.execute(
+            """
             INSERT INTO alarms (name, hour, minute, second, clock_id, enabled, days, duration, mode, pattern)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """, (
-            alarm.name, alarm.hour, alarm.minute, alarm.second,
-            alarm.clock_id, int(alarm.enabled), alarm.days, alarm.duration,
-            alarm.mode, alarm.pattern
-        ))
+        """,
+            (
+                alarm.name,
+                alarm.hour,
+                alarm.minute,
+                alarm.second,
+                alarm.clock_id,
+                int(alarm.enabled),
+                alarm.days,
+                alarm.duration,
+                alarm.mode,
+                alarm.pattern,
+            ),
+        )
         self._conn.commit()
 
         alarm.id = cursor.lastrowid
@@ -134,7 +159,9 @@ class Database:
         ).fetchone()
         alarm.created_at = row[0] if row else None
 
-        logger.info(f"Created alarm: {alarm.name} at {alarm.hour:02d}:{alarm.minute:02d}:{alarm.second:02d} (mode={alarm.mode})")
+        logger.info(
+            f"Created alarm: {alarm.name} at {alarm.hour:02d}:{alarm.minute:02d}:{alarm.second:02d} (mode={alarm.mode})"
+        )
         return alarm
 
     def get_alarm(self, alarm_id: int) -> Optional[Alarm]:
@@ -166,18 +193,28 @@ class Database:
         if alarm.id is None:
             return None
 
-        self._conn.execute("""
+        self._conn.execute(
+            """
             UPDATE alarms SET
                 name = ?, hour = ?, minute = ?, second = ?,
                 clock_id = ?, enabled = ?, days = ?, duration = ?,
                 mode = ?, pattern = ?
             WHERE id = ?
-        """, (
-            alarm.name, alarm.hour, alarm.minute, alarm.second,
-            alarm.clock_id, int(alarm.enabled), alarm.days, alarm.duration,
-            alarm.mode, alarm.pattern,
-            alarm.id
-        ))
+        """,
+            (
+                alarm.name,
+                alarm.hour,
+                alarm.minute,
+                alarm.second,
+                alarm.clock_id,
+                int(alarm.enabled),
+                alarm.days,
+                alarm.duration,
+                alarm.mode,
+                alarm.pattern,
+                alarm.id,
+            ),
+        )
         self._conn.commit()
 
         logger.info(f"Updated alarm {alarm.id}: {alarm.name} (mode={alarm.mode})")
@@ -196,8 +233,7 @@ class Database:
     def toggle_alarm(self, alarm_id: int, enabled: bool) -> Optional[Alarm]:
         """Enable or disable an alarm."""
         self._conn.execute(
-            "UPDATE alarms SET enabled = ? WHERE id = ?",
-            (int(enabled), alarm_id)
+            "UPDATE alarms SET enabled = ? WHERE id = ?", (int(enabled), alarm_id)
         )
         self._conn.commit()
         return self.get_alarm(alarm_id)
@@ -206,15 +242,14 @@ class Database:
         """Mark an alarm as triggered (update last_triggered timestamp)."""
         self._conn.execute(
             "UPDATE alarms SET last_triggered = datetime('now') WHERE id = ?",
-            (alarm_id,)
+            (alarm_id,),
         )
         self._conn.commit()
 
     def disable_once_alarm(self, alarm_id: int) -> None:
         """Disable a 'once' alarm after it triggers."""
         self._conn.execute(
-            "UPDATE alarms SET enabled = 0 WHERE id = ? AND days = 'once'",
-            (alarm_id,)
+            "UPDATE alarms SET enabled = 0 WHERE id = ? AND days = 'once'", (alarm_id,)
         )
         self._conn.commit()
 
@@ -236,7 +271,9 @@ class Database:
             last_triggered=row[12] if len(row) > 12 else None,
         )
 
+
 _db: Optional[Database] = None
+
 
 def get_db() -> Database:
     """Get or create the global database instance."""
@@ -245,6 +282,7 @@ def get_db() -> Database:
         _db = Database()
         _db.connect()
     return _db
+
 
 def close_db() -> None:
     """Close the global database connection."""

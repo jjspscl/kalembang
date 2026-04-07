@@ -37,23 +37,40 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+
 class DutyRequest(BaseModel):
     """Request body for setting motor duty cycle."""
+
     duty: int = Field(..., ge=0, le=100, description="Duty cycle percentage (0-100)")
+
+
+class ActiveAlarmInfo(BaseModel):
+    """Info about a currently-firing alarm included in status."""
+
+    id: int
+    name: str
+    clock_id: int
+
 
 class StatusResponse(BaseModel):
     """Response model for status endpoint."""
+
     clock1: dict[str, bool | int]
     clock2: dict[str, bool | int]
     stop_button_pressed: bool | None
+    active_alarms: list[ActiveAlarmInfo] = []
+
 
 class MessageResponse(BaseModel):
     """Generic response with a message."""
+
     message: str
     success: bool = True
 
+
 class AlarmRequest(BaseModel):
     """Request body for creating/updating an alarm."""
+
     name: str = Field(..., min_length=1, max_length=100)
     hour: int = Field(..., ge=0, le=23)
     minute: int = Field(..., ge=0, le=59)
@@ -65,8 +82,10 @@ class AlarmRequest(BaseModel):
     mode: str = Field(default="clock1", pattern="^(clock1|clock2|pattern)$")
     pattern: Optional[str] = Field(default=None)
 
+
 class AlarmResponse(BaseModel):
     """Response model for alarm endpoints."""
+
     id: int
     name: str
     hour: int
@@ -81,13 +100,16 @@ class AlarmResponse(BaseModel):
     created_at: Optional[str]
     last_triggered: Optional[str]
 
+
 class TimeResponse(BaseModel):
     """Response model for time endpoint."""
+
     timestamp: str
     hour: int
     minute: int
     second: int
     day_of_week: str
+
 
 async def stop_button_monitor():
     """
@@ -107,6 +129,7 @@ async def stop_button_monitor():
             if button_pressed and not button_was_pressed:
                 logger.warning("STOP button pressed - stopping all motors!")
                 controller.trigger_stop()
+                _clear_all_active_alarms()
 
             button_was_pressed = button_pressed
 
@@ -122,8 +145,11 @@ async def stop_button_monitor():
             logger.exception("Unexpected error in stop button monitor: %s", e)
             await asyncio.sleep(1.0)
 
+
 _alarm_off_tasks: dict[int, asyncio.Task[None]] = {}
 _pattern_tasks: dict[int, asyncio.Task[None]] = {}
+_active_alarms: dict[int, dict] = {}
+
 
 async def alarm_scheduler():
     """
@@ -145,13 +171,24 @@ async def alarm_scheduler():
                 if alarm.id is None:
                     continue
                 alarm_id = alarm.id
+                if alarm_id in _active_alarms:
+                    continue
                 if alarm.matches_time(now):
-                    logger.info("Triggering alarm: %s (mode=%s)", alarm.name, alarm.mode)
+                    logger.info(
+                        "Triggering alarm: %s (mode=%s)", alarm.name, alarm.mode
+                    )
 
                     db.mark_triggered(alarm_id)
 
                     if alarm.days == "once":
                         db.disable_once_alarm(alarm_id)
+
+                    _active_alarms[alarm_id] = {
+                        "id": alarm_id,
+                        "name": alarm.name,
+                        "clock_id": alarm.clock_id,
+                        "mode": alarm.mode,
+                    }
 
                     if alarm.mode == "pattern" and alarm.pattern:
                         if alarm_id in _pattern_tasks:
@@ -162,11 +199,16 @@ async def alarm_scheduler():
                                 player = get_pattern_player(controller)
                                 await player.play_json(pattern_json)
                             except Exception as e:
-                                logger.error("Pattern playback error for alarm %d: %s", aid, e)
+                                logger.error(
+                                    "Pattern playback error for alarm %d: %s", aid, e
+                                )
                             finally:
                                 _pattern_tasks.pop(aid, None)
+                                _active_alarms.pop(aid, None)
 
-                        task = asyncio.create_task(play_pattern(alarm_id, alarm.pattern))
+                        task = asyncio.create_task(
+                            play_pattern(alarm_id, alarm.pattern)
+                        )
                         _pattern_tasks[alarm_id] = task
 
                     else:
@@ -190,8 +232,11 @@ async def alarm_scheduler():
                                     ctrl.clock2_off()
                                 logger.info("Alarm %d auto-off after %ds", aid, dur)
                                 _alarm_off_tasks.pop(aid, None)
+                                _active_alarms.pop(aid, None)
 
-                            task = asyncio.create_task(auto_off(clock_id, alarm_id, alarm.duration))
+                            task = asyncio.create_task(
+                                auto_off(clock_id, alarm_id, alarm.duration)
+                            )
                             _alarm_off_tasks[alarm_id] = task
 
             await asyncio.sleep(1.0 - (datetime.now().microsecond / 1_000_000))
@@ -202,6 +247,7 @@ async def alarm_scheduler():
         except (OSError, RuntimeError, GPIOError) as e:
             logger.exception("Error in alarm scheduler: %s", e)
             await asyncio.sleep(1.0)
+
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
@@ -251,9 +297,12 @@ async def lifespan(_app: FastAPI):
         task.cancel()
     _pattern_tasks.clear()
 
+    _active_alarms.clear()
+
     close_db()
     controller.cleanup()
     logger.info("Kalembang shutdown complete")
+
 
 app = FastAPI(
     title="Kalembang",
@@ -270,11 +319,41 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+def _clear_active_alarms_for_clock(clock_id: int) -> None:
+    """Remove active alarm entries matching the given clock_id or pattern mode."""
+    to_remove = [
+        aid
+        for aid, info in _active_alarms.items()
+        if info["clock_id"] == clock_id or info.get("mode") == "pattern"
+    ]
+    for aid in to_remove:
+        _active_alarms.pop(aid, None)
+        if aid in _alarm_off_tasks:
+            _alarm_off_tasks[aid].cancel()
+            _alarm_off_tasks.pop(aid, None)
+        if aid in _pattern_tasks:
+            _pattern_tasks[aid].cancel()
+            _pattern_tasks.pop(aid, None)
+
+
+def _clear_all_active_alarms() -> None:
+    """Remove all active alarm entries and cancel their tasks."""
+    for aid in list(_alarm_off_tasks):
+        _alarm_off_tasks.pop(aid).cancel()
+    for aid in list(_pattern_tasks):
+        _pattern_tasks.pop(aid).cancel()
+    _active_alarms.clear()
+
+
 @app.get("/api/v1/status", response_model=StatusResponse)
 async def get_status():
     """Get current status of all clocks and controls."""
     controller = get_controller()
-    return controller.get_status()
+    status = controller.get_status()
+    status["active_alarms"] = list(_active_alarms.values())
+    return status
+
 
 @app.post("/api/v1/clock/1/on", response_model=MessageResponse)
 async def clock1_on():
@@ -283,12 +362,15 @@ async def clock1_on():
     controller.clock1_on()
     return MessageResponse(message="Clock 1 is ON")
 
+
 @app.post("/api/v1/clock/1/off", response_model=MessageResponse)
 async def clock1_off():
     """Turn off Clock 1."""
     controller = get_controller()
     controller.clock1_off()
+    _clear_active_alarms_for_clock(1)
     return MessageResponse(message="Clock 1 is OFF")
+
 
 @app.post("/api/v1/clock/2/on", response_model=MessageResponse)
 async def clock2_on():
@@ -297,19 +379,24 @@ async def clock2_on():
     controller.clock2_on()
     return MessageResponse(message="Clock 2 is ON")
 
+
 @app.post("/api/v1/clock/2/off", response_model=MessageResponse)
 async def clock2_off():
     """Turn off Clock 2."""
     controller = get_controller()
     controller.clock2_off()
+    _clear_active_alarms_for_clock(2)
     return MessageResponse(message="Clock 2 is OFF")
+
 
 @app.post("/api/v1/clock/all/off", response_model=MessageResponse)
 async def all_off():
     """Turn off all clocks immediately."""
     controller = get_controller()
     controller.all_off()
+    _clear_all_active_alarms()
     return MessageResponse(message="All clocks are OFF")
+
 
 @app.post("/api/v1/clock/1/duty", response_model=MessageResponse)
 async def set_clock1_duty(request: DutyRequest):
@@ -318,6 +405,7 @@ async def set_clock1_duty(request: DutyRequest):
     controller.set_clock1_duty(request.duty)
     return MessageResponse(message=f"Clock 1 duty set to {request.duty}%")
 
+
 @app.post("/api/v1/clock/2/duty", response_model=MessageResponse)
 async def set_clock2_duty(request: DutyRequest):
     """Set duty cycle (0-100) for Clock 2."""
@@ -325,12 +413,15 @@ async def set_clock2_duty(request: DutyRequest):
     controller.set_clock2_duty(request.duty)
     return MessageResponse(message=f"Clock 2 duty set to {request.duty}%")
 
+
 @app.post("/api/v1/stop/trigger", response_model=MessageResponse)
 async def trigger_stop():
     """Manually trigger emergency stop (same as pressing STOP button)."""
     controller = get_controller()
     controller.trigger_stop()
+    _clear_all_active_alarms()
     return MessageResponse(message="STOP triggered - all clocks OFF")
+
 
 @app.get("/api/v1/time", response_model=TimeResponse)
 async def get_time():
@@ -345,8 +436,27 @@ async def get_time():
         day_of_week=day_names[now.weekday()],
     )
 
+
 def _alarm_to_response(alarm: Alarm) -> AlarmResponse:
-    \"\"\"Convert Alarm dataclass to AlarmResponse.\"\"\"\n    if alarm.id is None:\n        raise ValueError(\"Alarm must have an id\")\n    return AlarmResponse(\n        id=alarm.id,\n        name=alarm.name,\n        hour=alarm.hour,\n        minute=alarm.minute,\n        second=alarm.second,\n        clock_id=alarm.clock_id,\n        enabled=alarm.enabled,\n        days=alarm.days,\n        duration=alarm.duration,\n        mode=alarm.mode,\n        pattern=alarm.pattern,\n        created_at=alarm.created_at,\n        last_triggered=alarm.last_triggered,\n    )
+    """Convert Alarm dataclass to AlarmResponse."""
+    if alarm.id is None:
+        raise ValueError("Alarm must have an id")
+    return AlarmResponse(
+        id=alarm.id,
+        name=alarm.name,
+        hour=alarm.hour,
+        minute=alarm.minute,
+        second=alarm.second,
+        clock_id=alarm.clock_id,
+        enabled=alarm.enabled,
+        days=alarm.days,
+        duration=alarm.duration,
+        mode=alarm.mode,
+        pattern=alarm.pattern,
+        created_at=alarm.created_at,
+        last_triggered=alarm.last_triggered,
+    )
+
 
 @app.get("/api/v1/alarms", response_model=list[AlarmResponse])
 async def list_alarms():
@@ -354,6 +464,7 @@ async def list_alarms():
     db = get_db()
     alarms = db.get_all_alarms()
     return [_alarm_to_response(a) for a in alarms]
+
 
 @app.post("/api/v1/alarms", response_model=AlarmResponse)
 async def create_alarm(request: AlarmRequest):
@@ -377,6 +488,7 @@ async def create_alarm(request: AlarmRequest):
     created = db.create_alarm(alarm)
     return _alarm_to_response(created)
 
+
 @app.get("/api/v1/alarms/{alarm_id}", response_model=AlarmResponse)
 async def get_alarm(alarm_id: int):
     """Get an alarm by ID."""
@@ -387,6 +499,7 @@ async def get_alarm(alarm_id: int):
         raise HTTPException(status_code=404, detail="Alarm not found")
 
     return _alarm_to_response(alarm)
+
 
 @app.put("/api/v1/alarms/{alarm_id}", response_model=AlarmResponse)
 async def update_alarm(alarm_id: int, request: AlarmRequest):
@@ -418,6 +531,7 @@ async def update_alarm(alarm_id: int, request: AlarmRequest):
         raise HTTPException(status_code=500, detail="Failed to update alarm")
     return _alarm_to_response(updated)
 
+
 @app.delete("/api/v1/alarms/{alarm_id}", response_model=MessageResponse)
 async def delete_alarm(alarm_id: int):
     """Delete an alarm."""
@@ -428,6 +542,7 @@ async def delete_alarm(alarm_id: int):
         raise HTTPException(status_code=404, detail="Alarm not found")
 
     return MessageResponse(message=f"Alarm {alarm_id} deleted")
+
 
 @app.patch("/api/v1/alarms/{alarm_id}/toggle", response_model=AlarmResponse)
 async def toggle_alarm(alarm_id: int, enabled: bool):
@@ -440,16 +555,19 @@ async def toggle_alarm(alarm_id: int, enabled: bool):
 
     return _alarm_to_response(alarm)
 
+
 class PatternEventModel(BaseModel):
     clock: int = Field(..., ge=1, le=2)
     time: float = Field(..., ge=0)
     duration: float = Field(..., gt=0)
     duty: int = Field(..., ge=0, le=100)
 
+
 class PatternModel(BaseModel):
     name: str = Field(default="Custom Pattern")
     totalDuration: float = Field(..., gt=0)
     events: list[PatternEventModel]
+
 
 class PatternResponse(BaseModel):
     id: str
@@ -458,8 +576,10 @@ class PatternResponse(BaseModel):
     totalDuration: float
     events: list[dict]
 
+
 class PatternTestRequest(BaseModel):
     pattern: PatternModel
+
 
 @app.get("/api/v1/patterns/presets", response_model=list[PatternResponse])
 async def list_preset_patterns():
@@ -476,6 +596,7 @@ async def list_preset_patterns():
         for p in presets
     ]
 
+
 @app.get("/api/v1/patterns/presets/{pattern_id}", response_model=PatternResponse)
 async def get_preset(pattern_id: str):
     """Get a specific preset pattern by ID."""
@@ -489,6 +610,7 @@ async def get_preset(pattern_id: str):
         totalDuration=preset.total_duration,
         events=preset.events,
     )
+
 
 @app.post("/api/v1/patterns/test", response_model=MessageResponse)
 async def test_pattern(request: PatternTestRequest):
@@ -507,6 +629,7 @@ async def test_pattern(request: PatternTestRequest):
     asyncio.create_task(player.play(pattern))
     return MessageResponse(message=f"Pattern '{pattern.name}' started")
 
+
 @app.post("/api/v1/patterns/stop", response_model=MessageResponse)
 async def stop_pattern():
     """Stop any currently playing pattern."""
@@ -515,10 +638,12 @@ async def stop_pattern():
     await player.stop()
     return MessageResponse(message="Pattern stopped")
 
+
 @app.get("/health")
 async def health():
     """Health check endpoint."""
     return {"status": "ok"}
+
 
 CLIENT_DIR = Path(__file__).parent.parent.parent / "client-dist"
 
@@ -533,6 +658,8 @@ if CLIENT_DIR.exists():
             return FileResponse(file_path)
         return FileResponse(CLIENT_DIR / "index.html")
 
+
 if __name__ == "__main__":
     import uvicorn
+
     uvicorn.run(app, host=API_HOST, port=API_PORT)

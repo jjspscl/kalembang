@@ -1,14 +1,18 @@
 import { Outlet, Link, useLocation } from "@tanstack/react-router";
 import { motion } from "motion/react";
 import { isDemo } from "../lib/api";
+import { useAlarmNotifications } from "../lib/useAlarmNotifications";
+import { AlarmNotification } from "../components/AlarmNotification";
 
 export function RootLayout() {
   const location = useLocation();
   const isHome = location.pathname === "/";
   const isAlarms = location.pathname.startsWith("/alarms");
+  const { toasts, dismissToast } = useAlarmNotifications();
 
   return (
     <div className="app">
+      <AlarmNotification toasts={toasts} onDismiss={dismissToast} />
       {isDemo && (
         <motion.div
           className="demo-banner"
