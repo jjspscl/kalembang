@@ -7,6 +7,7 @@ import { RootLayout } from "./pages/RootLayout";
 import { HomePage } from "./pages/HomePage";
 import { AlarmsPage } from "./pages/AlarmsPage";
 import { AlarmEditPage } from "./pages/AlarmEditPage";
+import { ConnectPage } from "./pages/ConnectPage";
 const rootRoute = createRootRoute({
   component: RootLayout,
 });
@@ -30,11 +31,17 @@ const alarmEditRoute = createRoute({
   path: "/alarms/$alarmId",
   component: AlarmEditPage,
 });
+const connectRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/connect",
+  component: ConnectPage,
+});
 const routeTree = rootRoute.addChildren([
   indexRoute,
   alarmsRoute,
   alarmNewRoute,
   alarmEditRoute,
+  connectRoute,
 ]);
 export const router = createRouter({ routeTree });
 declare module "@tanstack/react-router" {

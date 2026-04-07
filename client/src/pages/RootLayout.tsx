@@ -8,6 +8,7 @@ export function RootLayout() {
   const location = useLocation();
   const isHome = location.pathname === "/";
   const isAlarms = location.pathname.startsWith("/alarms");
+  const isConnect = location.pathname === "/connect";
   const { toasts, dismissToast } = useAlarmNotifications();
 
   return (
@@ -51,6 +52,21 @@ export function RootLayout() {
               />
             )}
           </Link>
+          {!isDemo && (
+            <Link
+              to="/connect"
+              className={`nav-link ${isConnect ? "active" : ""}`}
+            >
+              Connect
+              {isConnect && (
+                <motion.div
+                  className="nav-indicator"
+                  layoutId="nav-indicator"
+                  transition={{ type: "spring", stiffness: 500, damping: 35 }}
+                />
+              )}
+            </Link>
+          )}
         </nav>
       </motion.header>
 
