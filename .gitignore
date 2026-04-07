@@ -1,5 +1,7 @@
 # OpenCode
 opencode.json
+AGENTS.md
+.opencode/
 
 # Python
 __pycache__/
