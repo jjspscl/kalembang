@@ -53,7 +53,7 @@ export function AlarmsPage() {
   };
 
   const handleDuplicate = (
-    alarm: typeof alarms extends (infer T)[] | undefined ? T : never
+    alarm: typeof alarms extends (infer T)[] | undefined ? T : never,
   ) => {
     createAlarm.mutate({
       name: `${alarm.name} (Copy)`,
@@ -76,7 +76,7 @@ export function AlarmsPage() {
         transition={{ duration: 0.3 }}
       >
         <h2>Alarms</h2>
-        <div style={{ display: "flex", gap: "0.75rem" }}>
+        <div className="page-header-actions">
           <motion.button
             className="btn btn-secondary"
             whileHover={{ scale: 1.02 }}
